@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block heading %}Log in{% endblock %}
+{% block subheading %}Each account holds one person's Digital Twin: their profile, tests and trends{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-md">
+  <form method="post" class="card space-y-4 p-6">
+    <p class="card-title">Welcome back</p>
+    {% if error %}<p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>{% endif %}
+    <div>
+      <label for="username" class="text-sm font-medium text-slate-700">Username</label>
+      <input id="username" name="username" autocomplete="username" autocapitalize="none" required class="field-input mt-1">
+    </div>
+    <div>
+      <label for="password" class="text-sm font-medium text-slate-700">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required class="field-input mt-1">
+    </div>
+    <button class="btn btn-primary w-full">Log in</button>
+    <p class="text-center text-sm text-slate-500">New here? <a href="{{ url_for('auth.register') }}" class="font-medium text-brand-600 hover:underline">Create an account</a></p>
+  </form>
+</div>
+{% endblock %}

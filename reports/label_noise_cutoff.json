@@ -1,0 +1,9 @@
+{
+  "cutoff_patient_id": 6733,
+  "decided_from": "training set only (1,719 records); test labels not used",
+  "method": "single change point in the rule-exception rate over PatientID order (binomial likelihood)",
+  "train_records_before": 1584,
+  "train_exception_rate_before": 0.006944444444444444,
+  "train_records_from_cutoff": 135,
+  "train_exception_rate_from_cutoff": 0.4666666666666667
+}

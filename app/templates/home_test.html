@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+{% block title %}Home check{% endblock %}
+{% block heading %}Home check (Level 1){% endblock %}
+{% block subheading %}{{ patient.name }} &middot; repeat it regularly so changes can be followed over time{% endblock %}
+
+{# ---------------------------------------------------------------- macros #}
+{% macro yes_no(f) -%}
+{% set v = values.get(f.name, '')|string %}
+<div class="rounded-lg border border-slate-200 p-4 {{ 'border-red-300 bg-red-50/40' if errors[f.name] }}" {% if not f.optional %}data-required-radio="{{ f.name }}"{% endif %}
+     data-voice="yesno" data-name="{{ f.name }}" data-optional="{{ '1' if f.optional else '0' }}" data-say="{{ f.question or f.label }} {{ f.help or '' }} Please say yes or no.">
+  <p class="text-sm font-medium text-slate-800">{{ f.question or f.label }}</p>
+  {% if f.help %}<p class="mt-1 text-xs text-slate-500">{{ f.help }}</p>{% endif %}
+  <div class="mt-3 flex gap-2">
+    {% for val, lab in [(1, 'Yes'), (0, 'No')] %}
+    <label class="choice"><input type="radio" name="{{ f.name }}" value="{{ val }}" {{ 'checked' if v in [val|string, (val|float)|string] }}><span>{{ lab }}</span></label>
+    {% endfor %}
+  </div>
+  {% if errors[f.name] %}<p class="mt-2 text-xs text-red-600">{{ errors[f.name] }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro help_question(key, text, allow_na) -%}
+{% set v = values.get(key, '')|string %}
+<div class="rounded-lg border border-slate-200 p-4 {{ 'border-red-300 bg-red-50/40' if errors[key] }}" data-required-radio="{{ key }}"
+     data-voice="help" data-name="{{ key }}" data-na="{{ '1' if allow_na else '0' }}"
+     data-say="{{ text }}. Do they do this without help, need some help, or can they not do it?{{ ' If they never did this task, say never.' if allow_na }}">
+  <p class="text-sm font-medium text-slate-800">{{ text }}</p>
+  <div class="mt-3 flex flex-wrap gap-2">
+    {% for val, lab in help_answers + ([na_answer] if allow_na else []) %}
+    <label class="choice"><input type="radio" name="{{ key }}" value="{{ val }}" {{ 'checked' if v == val }}><span>{{ lab }}</span></label>
+    {% endfor %}
+  </div>
+  {% if errors[key] %}<p class="mt-2 text-xs text-red-600">{{ errors[key] }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% block content %}
+{% set steps = ['Memory and behaviour', 'Daily life', 'Quick brain check', 'Review'] %}
+
+<!-- Progress -->
+<div class="card mb-6 p-4 sm:p-5">
+  <div class="flex items-center justify-between text-sm">
+    <p class="font-semibold text-ink-900">Step <span id="stepNum">1</span> of <span id="stepTotal">{{ steps|length }}</span>: <span id="stepName">{{ steps[0] }}</span></p>
+    <p class="hidden text-xs text-slate-500 sm:block">Takes a few minutes{% if last_home %} &middot; last home check {{ last_home.recorded_at.strftime('%d %b %Y') }}{% endif %}</p>
+  </div>
+  <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100"><div id="progressBar" class="h-full rounded-full bg-brand-600 transition-all" style="width: 25%"></div></div>
+  <ol class="mt-3 hidden gap-1 text-[11px] text-slate-400 lg:flex">
+    {% for s in steps %}<li class="step-dot flex-1 truncate" data-i="{{ loop.index }}">{{ loop.index }}. {{ s }}</li>{% endfor %}
+  </ol>
+</div>
+
+<form method="post" novalidate id="assessForm" data-voice-form>
+  <input type="hidden" name="voice_used" id="voice_used" value="{{ values.get('voice_used', '') }}">
+  <input type="hidden" name="start_step" id="start_step" value="{{ start_step }}">
+  <div class="mb-6">{% include "_voice_bar.html" %}</div>
+  <div id="childMsg" class="hidden">{{ child_message }}</div>
+
+  <!-- 1. Memory and behaviour -->
+  <section class="step card hidden p-6" data-step="1" data-say="Let us begin with some questions about memory and behaviour over the last few months. Please answer yes or no.">
+    <p class="card-title">Memory and behaviour</p>
+    <p class="mt-1 text-sm text-slate-500">Think about the last few months. Answer "Yes" if it happens often or is a new change for them.</p>
+    <div class="mt-4 grid gap-3 md:grid-cols-2">{% for f in fields if f.section == 'symptoms' and not f.optional %}{{ yes_no(f) }}{% endfor %}</div>
+  </section>
+
+  <!-- 2. Daily life -->
+  <section class="step card hidden p-6" data-step="2" data-say="Now some questions about daily life.">
+    <p class="card-title">Daily life</p>
+    <div id="questionsBlock">
+      <p class="mt-6 text-sm font-semibold text-ink-900">Looking after themselves</p>
+      <p class="text-xs text-slate-500">How much help do they need with these at the moment?</p>
+      <div class="mt-3 grid gap-3 md:grid-cols-2">{% for key, text in self_care_items %}{{ help_question(key, text, False) }}{% endfor %}</div>
+      <p class="mt-6 text-sm font-semibold text-ink-900">Everyday tasks</p>
+      <p class="text-xs text-slate-500">Choose "Never did this task" if it is something they never did, for example cooking.</p>
+      <div class="mt-3 grid gap-3 md:grid-cols-2">{% for key, text in everyday_items %}{{ help_question(key, text, True) }}{% endfor %}</div>
+    </div>
+  </section>
+
+  <!-- 3. Quick brain check -->
+  <section class="step card hidden p-6" data-step="3" data-brain="1">
+    <p class="card-title">Quick brain check</p>
+    <p class="mt-1 text-sm text-slate-500">The person should answer on their own, without help, notes or a calendar. A family member may read the questions aloud and type the answers. It takes about 3 minutes.</p>
+    {% if errors.bc_completed %}<p class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ errors.bc_completed }}</p>{% endif %}
+    {% set ws = values.get('bc_wordset', wordset_idx)|int %}
+    <input type="hidden" name="bc_wordset" value="{{ ws }}">
+    <input type="hidden" name="bc_completed" id="bc_completed" value="{{ values.get('bc_completed', '') }}">
+    <input type="hidden" name="bc_client_now" id="bc_client_now" value="{{ values.get('bc_client_now', '') }}">
+
+    <div class="bc mt-5" data-bc="intro" data-say="Now a short brain check. The person should answer on their own, without any help.">
+      <div class="sr-only" data-voice="command" data-click="[data-bc-start]" data-say="Say start when you are ready."></div>
+      <div class="rounded-lg bg-slate-50 p-5 text-sm text-slate-700">
+        <p>There are 11 short tasks. Once a task is finished you cannot go back to it. That is part of the check.</p>
+        <button type="button" class="btn btn-primary mt-4" data-bc-start>Start the brain check</button>
+      </div>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="words" data-after-say="[data-hide-words]"
+         data-say="Listen carefully and remember these three words. {{ word_sets[ws]|join(', ') }}. Once more: {{ word_sets[ws]|join(', ') }}.">
+      <p class="bc-title">1. Three words</p>
+      <div id="wordCard">
+        <p class="text-sm text-slate-600">Read these three words aloud and try to remember them. You will be asked for them again later.</p>
+        <div class="mt-4 flex flex-wrap gap-3">{% for w in word_sets[ws] %}<span class="rounded-lg bg-brand-50 px-5 py-3 text-2xl font-semibold tracking-wide text-brand-700">{{ w|upper }}</span>{% endfor %}</div>
+        <button type="button" class="btn btn-primary mt-4" data-hide-words>I have read them, hide the words</button>
+      </div>
+      <div id="wordsNow" class="hidden" data-voice="words3" data-expect="{{ word_sets[ws]|join(',') }}" data-name="bc_now_1,bc_now_2,bc_now_3" data-say="Now please say the three words.">
+        <p class="text-sm text-slate-600">Now type the three words, in any order.</p>
+        <div class="mt-3 grid gap-3 sm:grid-cols-3">{% for i in [1, 2, 3] %}<input name="bc_now_{{ i }}" value="{{ values.get('bc_now_' ~ i, '') }}" class="field-input" autocomplete="off" placeholder="Word {{ i }}">{% endfor %}</div>
+        <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+      </div>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="date" data-say="Now some questions about today. Please do not look at a phone or calendar.">
+      <p class="bc-title">2. Today's date</p>
+      <p class="text-sm text-slate-600">Without looking at a phone or calendar:</p>
+      <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <label class="text-sm" data-voice="number" data-name="bc_year" data-say="What year is it now?">Year<input name="bc_year" type="number" value="{{ values.get('bc_year', '') }}" class="field-input mt-1" autocomplete="off"></label>
+        <label class="text-sm" data-voice="select" data-name="bc_month" data-say="What month is it?">Month<select name="bc_month" class="field-input mt-1"><option value="">Choose</option>{% for m in ['January','February','March','April','May','June','July','August','September','October','November','December'] %}<option value="{{ loop.index }}" {{ 'selected' if values.get('bc_month')|string == loop.index|string }}>{{ m }}</option>{% endfor %}</select></label>
+        <label class="text-sm" data-voice="number" data-name="bc_day" data-say="What is today's date? The day of the month.">Date (day of the month)<input name="bc_day" type="number" min="1" max="31" value="{{ values.get('bc_day', '') }}" class="field-input mt-1" autocomplete="off"></label>
+        <label class="text-sm" data-voice="select" data-name="bc_weekday" data-say="What day of the week is it today?">Day of the week<select name="bc_weekday" class="field-input mt-1"><option value="">Choose</option>{% for d in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}<option value="{{ loop.index0 }}" {{ 'selected' if values.get('bc_weekday')|string == loop.index0|string }}>{{ d }}</option>{% endfor %}</select></label>
+        <label class="text-sm" data-voice="select" data-name="bc_dayphase" data-say="Is it morning, afternoon, evening or night now?">Time of day<select name="bc_dayphase" class="field-input mt-1"><option value="">Choose</option>{% for p in ['morning','afternoon','evening','night'] %}<option value="{{ p }}" {{ 'selected' if values.get('bc_dayphase') == p }}>{{ p|capitalize }}</option>{% endfor %}</select></label>
+      </div>
+      <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="place" data-wait="1" data-say="Now, where are you?"
+         data-wait-say="A family member should now tick the answers that are correct, and then tap Continue.">
+      <p class="bc-title">3. Where are you now?</p>
+      <p class="text-sm text-slate-600">Type each answer. Then a family member (or the person, if alone) ticks <strong>Correct</strong> for each answer that is right. The computer cannot check these.</p>
+      <div class="mt-3 space-y-2">
+        {% for key, q in place_items %}
+        <div class="grid items-center gap-2 sm:grid-cols-[1fr_1fr_auto]" data-voice="text" data-name="bc_place_{{ key }}" data-say="{{ q }}">
+          <span class="text-sm text-slate-700">{{ q }}</span>
+          <input name="bc_place_{{ key }}" value="{{ values.get('bc_place_' ~ key, '') }}" class="field-input" autocomplete="off">
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="bc_place_ok_{{ key }}" value="1" {{ 'checked' if values.get('bc_place_ok_' ~ key) == '1' }}> Correct</label>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="counting">
+      <div class="sr-only" data-voice="numbers5" data-name="bc_serial_1,bc_serial_2,bc_serial_3,bc_serial_4,bc_serial_5" data-say="Start at one hundred and take away seven. Keep taking away seven from each answer, and say five numbers."></div>
+      <p class="bc-title">4. Counting backwards</p>
+      <p class="text-sm text-slate-600">Start at 100 and take away 7. Keep taking away 7 from each new answer. Type five answers, without paper or a calculator.</p>
+      <div class="mt-3 grid grid-cols-5 gap-2 sm:max-w-md">{% for i in [1, 2, 3, 4, 5] %}<input name="bc_serial_{{ i }}" type="number" value="{{ values.get('bc_serial_' ~ i, '') }}" class="field-input text-center" autocomplete="off">{% endfor %}</div>
+      <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="naming">
+      <p class="bc-title">5. What are these?</p>
+      <div class="mt-3 grid gap-6 sm:grid-cols-2 sm:max-w-xl">
+        <div class="text-center" data-voice="text" data-expect="clock,watch" data-name="bc_name_1" data-say="Look at the first picture. What is it?">
+          <svg viewBox="0 0 100 100" class="mx-auto h-28 w-28" fill="none" stroke="#123349" stroke-width="4"><circle cx="50" cy="50" r="40"/><line x1="50" y1="50" x2="50" y2="24" stroke-linecap="round"/><line x1="50" y1="50" x2="68" y2="58" stroke-linecap="round"/>{% for a in range(12) %}<line x1="50" y1="14" x2="50" y2="19" transform="rotate({{ a*30 }} 50 50)"/>{% endfor %}<circle cx="50" cy="50" r="3" fill="#123349"/></svg>
+          <input name="bc_name_1" value="{{ values.get('bc_name_1', '') }}" class="field-input mt-2" autocomplete="off" placeholder="Type its name">
+        </div>
+        <div class="text-center" data-voice="text" data-expect="pencil,pen,crayon" data-name="bc_name_2" data-say="Look at the second picture. What is it?">
+          <svg viewBox="0 0 120 100" class="mx-auto h-28 w-32"><g transform="rotate(-35 60 50)"><rect x="10" y="42" width="78" height="16" fill="#f5b301" stroke="#123349" stroke-width="3"/><rect x="2" y="42" width="10" height="16" rx="2" fill="#f2a6a6" stroke="#123349" stroke-width="3"/><polygon points="88,42 112,50 88,58" fill="#f3d9b1" stroke="#123349" stroke-width="3"/><polygon points="104,47.4 112,50 104,52.6" fill="#123349"/></g></svg>
+          <input name="bc_name_2" value="{{ values.get('bc_name_2', '') }}" class="field-input mt-2" autocomplete="off" placeholder="Type its name">
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="copy">
+      <div class="sr-only" data-voice="text" data-name="bc_copy" data-say="Please repeat this sentence after me. {{ copy_sentence }}."></div>
+      <p class="bc-title">6. Type this sentence exactly</p>
+      <p class="mt-2 rounded-lg bg-slate-50 px-4 py-3 text-lg font-medium text-ink-900">{{ copy_sentence }}</p>
+      <input name="bc_copy" value="{{ values.get('bc_copy', '') }}" class="field-input mt-3" autocomplete="off">
+      <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="steps" data-wait="1" data-say="Look at the shapes on the screen. Tap the triangle, then the big circle, then the small square." data-wait-say="Tap the three shapes, then tap Continue.">
+      <p class="bc-title">7. Follow the instruction</p>
+      <p class="text-sm text-slate-600">Tap <strong>the triangle</strong>, then <strong>the big circle</strong>, then <strong>the small square</strong>.</p>
+      <input type="hidden" name="bc_taps" id="bc_taps" value="{{ values.get('bc_taps', '') }}">
+      <div class="mt-4 flex flex-wrap items-end gap-4">
+        {% for key, svg in [('small-circle', '<circle cx="30" cy="30" r="13" fill="#0e9fb3"/>'), ('big-square', '<rect x="4" y="4" width="52" height="52" fill="#7c3aed"/>'),
+                           ('triangle', '<polygon points="30,4 56,54 4,54" fill="#f59e0b"/>'), ('small-square', '<rect x="17" y="17" width="26" height="26" fill="#2563eb"/>'),
+                           ('big-circle', '<circle cx="30" cy="30" r="27" fill="#16a34a"/>')] %}
+        <button type="button" class="tap rounded-xl border-2 border-slate-200 p-2 hover:border-brand-500" data-tap="{{ key }}" aria-label="shape"><svg viewBox="0 0 60 60" class="h-16 w-16">{{ svg|safe }}</svg></button>
+        {% endfor %}
+      </div>
+      <p class="mt-3 text-sm text-slate-500">Taps: <span id="tapCount">0</span> of 3 <button type="button" class="ml-2 text-brand-600 underline" id="tapReset">start again</button></p>
+      <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="reading">
+      <div class="sr-only" data-voice="buttons" data-buttons=".readbtn" data-say="Look at the card. It says: choose the word green. You can say the word, or tap it."></div>
+      <p class="bc-title">8. Read and do what it says</p>
+      <p class="mt-2 inline-block rounded-lg border-2 border-ink-900 px-6 py-4 text-2xl font-bold tracking-wide text-ink-900">CHOOSE THE WORD GREEN</p>
+      <input type="hidden" name="bc_read" id="bc_read" value="{{ values.get('bc_read', '') }}">
+      <div class="mt-4 flex gap-3">{% for w in ['red', 'green', 'blue'] %}<button type="button" class="readbtn btn btn-secondary px-6 text-base" data-read="{{ w }}">{{ w|upper }}</button>{% endfor %}</div>
+      <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="writing">
+      <div class="sr-only" data-voice="text" data-name="bc_write" data-say="Please say a short sentence of your own, about anything."></div>
+      <p class="bc-title">9. Write a sentence</p>
+      <p class="text-sm text-slate-600">Type any short sentence of your own, for example about your day or your family.</p>
+      <input name="bc_write" value="{{ values.get('bc_write', '') }}" class="field-input mt-3" autocomplete="off">
+      <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="shape" data-wait="1" data-say="Look at the picture at the top. Tap the picture below that is exactly the same." data-wait-say="Tap the matching picture, then tap Continue.">
+      <p class="bc-title">10. Which picture is exactly the same as this one?</p>
+      {% set fig_a %}<rect x="10" y="20" width="34" height="34" fill="none" stroke="#123349" stroke-width="3"/><rect x="34" y="8" width="34" height="34" fill="none" stroke="#123349" stroke-width="3" transform="rotate(20 51 25)"/>{% endset %}
+      <svg viewBox="0 0 80 64" class="mt-2 h-24 w-32 rounded-lg bg-slate-50">{{ fig_a|safe }}</svg>
+      <div class="mt-4 flex flex-wrap gap-4">
+        {% for key, svg in [('a', '<rect x="4" y="20" width="30" height="30" fill="none" stroke="#123349" stroke-width="3"/><rect x="44" y="10" width="30" height="30" fill="none" stroke="#123349" stroke-width="3"/>'),
+                           ('b', fig_a), ('c', '<rect x="10" y="20" width="34" height="34" fill="none" stroke="#123349" stroke-width="3"/><circle cx="52" cy="25" r="17" fill="none" stroke="#123349" stroke-width="3"/>')] %}
+        <label class="choice-img"><input type="radio" name="bc_shape" value="{{ key }}" {{ 'checked' if values.get('bc_shape') == key }}><svg viewBox="0 0 80 64" class="h-20 w-28">{{ svg|safe }}</svg></label>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn btn-primary mt-4" data-bc-next>Continue</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="recall">
+      <div class="sr-only" data-voice="words3" data-expect="{{ word_sets[ws]|join(',') }}" data-name="bc_recall_1,bc_recall_2,bc_recall_3" data-say="At the start I told you three words. Please say them now."></div>
+      <p class="bc-title">11. The three words</p>
+      <p class="text-sm text-slate-600">At the start you were shown three words. Type them now, in any order.</p>
+      <div class="mt-3 grid gap-3 sm:grid-cols-3">{% for i in [1, 2, 3] %}<input name="bc_recall_{{ i }}" value="{{ values.get('bc_recall_' ~ i, '') }}" class="field-input" autocomplete="off" placeholder="Word {{ i }}">{% endfor %}</div>
+      <button type="button" class="btn btn-primary mt-4" data-bc-finish>Finish the brain check</button>
+    </div>
+
+    <div class="bc hidden mt-5" data-bc="done">
+      <div class="rounded-lg border border-green-200 bg-green-50 p-5 text-sm text-green-900">
+        <p class="font-semibold">Brain check completed.</p>
+        <p class="mt-1">The answers are scored when you submit. Continue to the review step.</p>
+        <button type="button" class="mt-3 text-xs text-green-800 underline" data-bc-redo>Do the brain check again</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Review -->
+  <section class="step card hidden p-6" data-step="4" data-final="1" data-say="Let me check everything.">
+    <p class="card-title">Review and get the result</p>
+    <ul class="mt-4 space-y-2 text-sm">
+      <li class="flex justify-between gap-4 border-b border-slate-100 pb-2"><span class="text-slate-500">Person</span><span class="text-right font-medium">{{ patient.name }}, {{ age_now|int }} years</span></li>
+      <li class="flex justify-between gap-4 border-b border-slate-100 pb-2"><span class="text-slate-500">Body size (from profile)</span><span class="text-right font-medium">BMI {{ prof.bmi }}</span></li>
+      <li class="flex justify-between gap-4 border-b border-slate-100 pb-2"><span class="text-slate-500">Memory, thinking and daily life</span><span class="text-right font-medium">Estimated from the questions and the brain check</span></li>
+      <li class="flex justify-between gap-4 border-b border-slate-100 pb-2"><span class="text-slate-500">Lifestyle, health conditions, clinic numbers</span><span class="text-right font-medium">From the profile. <a href="{{ url_for('main.profile') }}" class="text-brand-600 hover:underline">Edit profile</a> if anything has changed.</span></li>
+    </ul>
+    <div class="mt-6 rounded-lg border border-slate-200 p-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-sm font-semibold text-ink-900">Any other symptoms? (optional)</p>
+          <p class="text-xs text-slate-500">Confusion, getting lost, or personality changes.</p>
+        </div>
+        <button type="button" class="btn btn-secondary" data-extras-toggle>Add symptoms</button>
+      </div>
+      <div id="extras" class="{{ 'hidden' if not extras_open }} mt-5 space-y-5">
+        <div class="grid gap-3 md:grid-cols-2">{% for f in fields if f.section == 'symptoms' and f.optional %}{{ yes_no(f) }}{% endfor %}</div>
+      </div>
+    </div>
+    <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      This is a research-based risk screening, <strong>not a medical diagnosis</strong>. Scores estimated from home questions are less certain than scores measured at a clinic. If you are worried about memory or behaviour changes, please see a doctor.
+    </div>
+  </section>
+
+  <!-- Navigation -->
+  <div id="wizardNav" class="mt-6 flex items-center justify-between gap-3">
+    <button type="button" id="backBtn" class="btn btn-secondary">Back</button>
+    <p id="stepError" class="hidden text-sm text-red-600">Please answer the highlighted questions.</p>
+    <div class="flex gap-3">
+      <button type="button" id="nextBtn" class="btn btn-primary px-6">Next</button>
+      <button type="submit" id="submitBtn" class="btn btn-primary hidden px-6" data-final-submit>Get risk estimate</button>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='voice.js') }}" defer></script>
+<script>
+(() => {
+  const form = document.getElementById('assessForm');
+  const steps = [...document.querySelectorAll('.step')];
+  const names = [...document.querySelectorAll('.step-dot')].map(d => d.textContent.replace(/^\d+\.\s*/, ''));
+  const BRAIN = 3;
+  let current = Math.min(Math.max(parseInt(document.getElementById('start_step').value || '1'), 1), steps.length);
+
+  function show(i) {
+    current = i;
+    steps.forEach(s => s.classList.toggle('hidden', +s.dataset.step !== i));
+    document.getElementById('stepNum').textContent = i;
+    document.getElementById('stepName').textContent = names[i - 1];
+    document.getElementById('progressBar').style.width = (100 * i / steps.length) + '%';
+    document.querySelectorAll('.step-dot').forEach(d => {
+      d.classList.toggle('text-brand-700', +d.dataset.i === i);
+      d.classList.toggle('font-semibold', +d.dataset.i === i);
+    });
+    if (i !== BRAIN) document.getElementById('wizardNav').classList.remove('hidden');
+    document.getElementById('backBtn').style.visibility = i === 1 ? 'hidden' : 'visible';
+    document.getElementById('nextBtn').classList.toggle('hidden', i === steps.length);
+    document.getElementById('submitBtn').classList.toggle('hidden', i !== steps.length);
+    document.getElementById('stepError').classList.add('hidden');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+
+  // ---- per-step validation (the server checks everything again) ----
+  function stepValid(i) {
+    const s = steps[i - 1];
+    let ok = true;
+    s.querySelectorAll('input[type=number], select').forEach(el => {
+      if (el.closest('.hidden') || el.closest('.bc')) return;
+      const bad = (el.required && el.value === '') || !el.checkValidity();
+      el.classList.toggle('field-error', bad);
+      if (bad) ok = false;
+    });
+    s.querySelectorAll('[data-required-radio]').forEach(box => {
+      if (box.closest('.hidden')) return;
+      const answered = !!box.querySelector('input:checked');
+      box.classList.toggle('border-red-300', !answered);
+      if (!answered) ok = false;
+    });
+    if (i === BRAIN && document.getElementById('bc_completed').value !== '1') ok = false;
+    return ok;
+  }
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    if (!stepValid(current)) { document.getElementById('stepError').classList.remove('hidden'); return; }
+    show(current + 1);
+  });
+  document.getElementById('backBtn').addEventListener('click', () => show(current - 1));
+  form.addEventListener('submit', e => { if (!stepValid(current)) { e.preventDefault(); document.getElementById('stepError').classList.remove('hidden'); } });
+
+  // ---- brain check: one task at a time, no going back ----
+  const panels = [...document.querySelectorAll('.bc')];
+  const showBc = key => {
+    panels.forEach(p => p.classList.toggle('hidden', p.dataset.bc !== key));
+    // while the brain check is running, only its own Continue buttons are shown
+    document.getElementById('wizardNav').classList.toggle('hidden', !['intro', 'done'].includes(key));
+    document.getElementById('stepError').classList.add('hidden');
+  };
+  const order = panels.map(p => p.dataset.bc);
+  function localIso() {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+  document.querySelector('[data-bc-start]').addEventListener('click', () => { document.getElementById('bc_client_now').value = localIso(); showBc('words'); });
+  document.querySelector('[data-hide-words]').addEventListener('click', () => {
+    document.getElementById('wordCard').classList.add('hidden');
+    document.getElementById('wordsNow').classList.remove('hidden');
+  });
+  document.querySelectorAll('[data-bc-next]').forEach(b => b.addEventListener('click', () => {
+    const here = b.closest('.bc').dataset.bc;
+    if (here === 'words') document.getElementById('wordCard').remove();  // the words cannot be seen again
+    showBc(order[order.indexOf(here) + 1]);
+  }));
+  document.querySelector('[data-bc-finish]').addEventListener('click', () => {
+    document.getElementById('bc_completed').value = '1';
+    // earlier answers are kept for scoring but hidden from view
+    showBc('done');
+  });
+  document.querySelector('[data-bc-redo]').addEventListener('click', () => window.location.reload());
+  let taps = [];
+  const tapInput = document.getElementById('bc_taps');
+  document.querySelectorAll('.tap').forEach(b => b.addEventListener('click', () => {
+    if (taps.length >= 3) return;
+    taps.push(b.dataset.tap); tapInput.value = taps.join(',');
+    document.getElementById('tapCount').textContent = taps.length;
+    b.classList.add('border-brand-500', 'bg-brand-50');
+  }));
+  document.getElementById('tapReset').addEventListener('click', () => {
+    taps = []; tapInput.value = ''; document.getElementById('tapCount').textContent = 0;
+    document.querySelectorAll('.tap').forEach(b => b.classList.remove('border-brand-500', 'bg-brand-50'));
+  });
+  document.querySelectorAll('.readbtn').forEach(b => b.addEventListener('click', () => {
+    document.getElementById('bc_read').value = b.dataset.read;
+    document.querySelectorAll('.readbtn').forEach(x => x.classList.toggle('ring-2', x === b));
+  }));
+  showBc(document.getElementById('bc_completed').value === '1' ? 'done' : 'intro');
+  document.querySelector('[data-extras-toggle]').addEventListener('click', () => document.getElementById('extras').classList.toggle('hidden'));
+
+  show(current);
+})();
+</script>
+{% endblock %}

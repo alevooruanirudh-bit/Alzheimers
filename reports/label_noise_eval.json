@@ -1,0 +1,50 @@
+{
+  "cutoff_patient_id": 6733,
+  "model": "existing hybrid (not retrained)",
+  "full": {
+    "accuracy": 0.9558139534883721,
+    "ci95": [
+      0.9348837209302325,
+      0.9744186046511628
+    ],
+    "n": 430,
+    "errors": 19,
+    "precision": 0.9463087248322147,
+    "recall": 0.9276315789473685,
+    "f1": 0.9368770764119602,
+    "roc_auc": 0.9447415751609239,
+    "positives": 152,
+    "negatives": 278
+  },
+  "valid_labels": {
+    "accuracy": 0.9899497487437185,
+    "ci95": [
+      0.9773869346733668,
+      0.9974874371859297
+    ],
+    "n": 398,
+    "errors": 4,
+    "precision": 0.9712230215827338,
+    "recall": 1.0,
+    "f1": 0.9854014598540146,
+    "roc_auc": 0.9952682720743558,
+    "positives": 135,
+    "negatives": 263
+  },
+  "corrupted_block": {
+    "accuracy": 0.53125,
+    "ci95": [
+      0.375,
+      0.6875
+    ],
+    "n": 32,
+    "errors": 15,
+    "precision": 0.6,
+    "recall": 0.35294117647058826,
+    "f1": 0.4444444444444444,
+    "roc_auc": 0.5333333333333334,
+    "positives": 17,
+    "negatives": 15
+  },
+  "note": "Cut-off decided from the training set only (reports/label_noise_cutoff.json) before these figures were computed; the model does not use PatientID; probabilities are the app's calibrated outputs."
+}

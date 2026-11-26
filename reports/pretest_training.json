@@ -1,0 +1,100 @@
+{
+  "file": "pretest_no_scores.joblib",
+  "features": [
+    "Age",
+    "Gender",
+    "Ethnicity",
+    "EducationLevel",
+    "BMI",
+    "Smoking",
+    "AlcoholConsumption",
+    "PhysicalActivity",
+    "DietQuality",
+    "SleepQuality",
+    "FamilyHistoryAlzheimers",
+    "CardiovascularDisease",
+    "Diabetes",
+    "Depression",
+    "HeadInjury",
+    "Hypertension",
+    "MemoryComplaints",
+    "BehavioralProblems",
+    "Confusion",
+    "Disorientation",
+    "PersonalityChanges",
+    "DifficultyCompletingTasks",
+    "Forgetfulness",
+    "SymptomCount"
+  ],
+  "best_params": {
+    "n_estimators": 1000,
+    "max_depth": 7,
+    "learning_rate": 0.009389708949580924,
+    "subsample": 0.8364425087884104,
+    "colsample_bytree": 0.729221298998731,
+    "min_child_weight": 9.45839719724416,
+    "gamma": 4.868939096665747,
+    "reg_alpha": 2.6305308355687864,
+    "reg_lambda": 0.5930330739032833,
+    "imbalance": "none"
+  },
+  "threshold": 0.47,
+  "calibration": "platt",
+  "cv": {
+    "accuracy": {
+      "mean": 0.7120482744592853,
+      "std": 0.014350318038904302,
+      "folds": [
+        0.6976744186046512,
+        0.7209302325581395,
+        0.6918604651162791,
+        0.7267441860465116,
+        0.7230320699708455
+      ]
+    },
+    "precision": {
+      "mean": 0.6294017710105099,
+      "std": 0.04264530089761806,
+      "folds": [
+        0.5934065934065934,
+        0.6756756756756757,
+        0.5701754385964912,
+        0.6320754716981132,
+        0.6756756756756757
+      ]
+    },
+    "recall": {
+      "mean": 0.470261482183986,
+      "std": 0.05935870205704226,
+      "folds": [
+        0.4462809917355372,
+        0.4098360655737705,
+        0.5327868852459017,
+        0.5491803278688525,
+        0.4132231404958678
+      ]
+    },
+    "f1": {
+      "mean": 0.5342050625180098,
+      "std": 0.0309441309378305,
+      "folds": [
+        0.5094339622641509,
+        0.5102040816326531,
+        0.5508474576271186,
+        0.5877192982456141,
+        0.5128205128205128
+      ]
+    },
+    "roc_auc": {
+      "mean": 0.685007824467369,
+      "std": 0.019364468363824393,
+      "folds": [
+        0.6549308824074418,
+        0.6950782749963078,
+        0.6934536996012406,
+        0.7099025254762961,
+        0.6716737398555581
+      ]
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Scan report{% endblock %}
+{% block heading %}Add a brain scan report{% endblock %}
+{% block subheading %}MRI, CT or PET reports are kept in the Digital Twin record with their date{% endblock %}
+{% block content %}
+<form method="post" enctype="multipart/form-data" novalidate id="scanForm" data-voice-form class="space-y-6">
+  <input type="hidden" name="voice_used" id="voice_used" value="">
+  {% include "_voice_bar.html" %}
+  <div id="childMsg" class="hidden"></div>
+  <section class="card p-6" data-say="Let us add the scan report.">
+    <div class="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+      Scan reports are stored so the full history is in one place and can be shown to a doctor. The risk model in this project was
+      trained on clinical and questionnaire data only, so it does <strong>not</strong> read or use scan results.
+    </div>
+    <div class="mt-5 grid gap-4 sm:grid-cols-2">
+      <div>
+        <label for="scan_date" class="text-sm font-medium text-slate-700">Date of the scan</label>
+        <input id="scan_date" name="scan_date" type="date" value="{{ values.get('scan_date', '') }}" class="field-input mt-1 {{ 'field-error' if errors.scan_date }}">
+        {% if errors.scan_date %}<p class="mt-1 text-xs text-red-600">{{ errors.scan_date }}</p>{% endif %}
+      </div>
+      <div data-voice="select" data-name="scan_type" data-say="What kind of scan was it? M R I, C T, PET, or other?">
+        <label for="scan_type" class="text-sm font-medium text-slate-700">Type of scan</label>
+        {% set st = values.get('scan_type', '') %}
+        <select id="scan_type" name="scan_type" class="field-input mt-1 {{ 'field-error' if errors.scan_type }}">
+          <option value="" disabled {{ 'selected' if not st }}>Select...</option>
+          {% for t in scan_types %}<option value="{{ t }}" {{ 'selected' if st == t }}>{{ t }}</option>{% endfor %}
+        </select>
+        {% if errors.scan_type %}<p class="mt-1 text-xs text-red-600">{{ errors.scan_type }}</p>{% endif %}
+      </div>
+      <div data-voice="text" data-name="facility" data-optional="1" data-say="Which hospital or scan centre? Say skip if you don't want to add it.">
+        <label for="facility" class="text-sm font-medium text-slate-700">Hospital or scan centre (optional)</label>
+        <input id="facility" name="facility" value="{{ values.get('facility', '') }}" maxlength="160" class="field-input mt-1">
+      </div>
+      <div>
+        <label for="file" class="text-sm font-medium text-slate-700">Report file (optional)</label>
+        <input id="file" name="file" type="file" accept=".pdf,.jpg,.jpeg,.png" class="field-input mt-1 {{ 'field-error' if errors.file }}">
+        {% if errors.file %}<p class="mt-1 text-xs text-red-600">{{ errors.file }}</p>{% else %}<p class="mt-1 text-xs text-slate-500">PDF, JPG or PNG, up to 10 MB. A photo of the report is fine.</p>{% endif %}
+      </div>
+      <div class="sm:col-span-2" data-voice="text" data-name="findings" data-optional="1" data-say="What does the report say? You can read out the conclusion, or say skip.">
+        <label for="findings" class="text-sm font-medium text-slate-700">What the report says (optional)</label>
+        <textarea id="findings" name="findings" rows="4" class="field-input mt-1" placeholder="e.g. the conclusion or impression from the report">{{ values.get('findings', '') }}</textarea>
+      </div>
+    </div>
+  </section>
+  <div class="flex justify-end"><button type="submit" class="btn btn-primary px-6" data-final-submit>Save scan report</button></div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='voice.js') }}" defer></script>{% endblock %}

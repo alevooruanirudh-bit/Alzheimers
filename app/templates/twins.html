@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "_macros.html" import risk_badge %}
+{% block title %}Digital Twins{% endblock %}
+{% block heading %}Digital Twins{% endblock %}
+{% block subheading %}Each twin stores every observation and prediction for one patient{% endblock %}
+
+{% block content %}
+{% if not patients %}
+<div class="card p-10 text-center">
+  <p class="card-title">No Digital Twins yet</p>
+  <p class="mt-2 text-sm text-slate-500">Twins appear when people create accounts, or load demo twins with <code>python -m src.seed_demo</code>.</p>
+</div>
+{% else %}
+<div class="card overflow-hidden">
+  <div class="overflow-x-auto">
+  <table class="table w-full min-w-[720px]">
+    <thead><tr><th>Patient</th><th>Age / gender</th><th>Visits</th><th>Latest risk</th><th class="text-right">Probability</th><th>Last visit <span class="font-normal normal-case text-slate-400">(newest first)</span></th><th></th></tr></thead>
+    <tbody>
+    {% for p in patients %}
+    {% set lp = p.latest_prediction %}
+    <tr class="hover:bg-slate-50">
+      <td>
+        <a class="font-semibold text-ink-900 hover:text-brand-600" href="{{ url_for('main.patient_view', patient_id=p.id) }}">{{ p.name }}</a>
+        <div class="text-xs text-slate-500">{{ 'Account: ' ~ owners[p.id] if p.id in owners else 'No account' }}{% if relations[p.id] %} &middot; {{ relations[p.id] }}{% endif %}</div>
+        <div class="mt-1 flex flex-wrap gap-1">
+          {% if p.is_demo %}<span class="badge badge-demo">Demo twin</span>{% endif %}
+          {% if p.observations|selectattr('is_simulated')|list %}<span class="badge badge-sim">Includes simulated visits</span>{% endif %}
+        </div>
+      </td>
+      <td>{{ ages[p.id] if ages[p.id] is not none else '' }} &middot; {{ 'Female' if p.gender == 1 else 'Male' }}</td>
+      <td>{{ p.observations|length }}</td>
+      <td>{% if lp %}{{ risk_badge(lp.risk_level) }}{% endif %}</td>
+      <td class="text-right font-semibold">{% if lp %}{{ lp.probability|pct }}{% endif %}</td>
+      <td class="text-slate-500">{{ p.latest_observation.recorded_at.strftime('%d %b %Y') if p.observations else 'No tests yet' }}</td>
+      <td class="text-right"><a class="text-sm font-medium text-brand-600 hover:underline" href="{{ url_for('main.patient_view', patient_id=p.id) }}">Open</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

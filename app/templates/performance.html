@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% from "_macros.html" import risk_badge %}
+{% block title %}Model performance{% endblock %}
+{% block heading %}Model performance{% endblock %}
+{% block subheading %}Held-out test set and 5-fold cross-validation on the training set. Loaded from reports/.{% endblock %}
+{% block content %}
+{% if not results %}
+<div class="card p-10 text-center text-sm text-slate-500">No results yet. Run <code>python -m src.train</code> then <code>python -m src.evaluate</code>.</div>
+{% else %}
+{% set P = results.proposed_model %}
+{% set h = results.models[P].test %}
+{% set ceil = results.ceiling_analysis %}
+
+<!-- Headline -->
+{% set v = noise.valid_labels if noise else h %}
+<section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+  {% for label, val in [('Accuracy', v.accuracy), ('Precision', v.precision), ('Recall', v.recall), ('F1-score', v.f1), ('ROC-AUC', v.roc_auc)] %}
+  <div class="card p-5">
+    <p class="text-xs text-slate-500">{{ label }} &middot; proposed hybrid</p>
+    <p class="mt-1 text-3xl font-bold text-ink-900">{{ val|pct(2) }}</p>
+    {% if label == 'Accuracy' %}<p class="mt-1 text-xs text-slate-500">95% CI {{ (v.ci95 or v.accuracy_95ci)[0]|pct }} to {{ (v.ci95 or v.accuracy_95ci)[1]|pct }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% if noise %}
+<p class="mt-3 text-xs text-slate-500">Test records with valid labels ({{ noise.valid_labels.n }} of {{ noise.full.n }} test patients). The full test set, including the records with randomised labels, is shown below.</p>
+
+<!-- Valid labels vs full test set -->
+<section class="card mt-6 overflow-hidden">
+  <div class="p-6 pb-3">
+    <p class="card-title">Accuracy with valid labels and on the full test set</p>
+    <p class="mt-2 text-sm leading-relaxed text-slate-700">
+      The dataset is synthetic. Its last records in file order (PatientID {{ noise.cutoff_patient_id }} to 6899) carry diagnosis labels that behave as if they were
+      assigned at random: in the training set {{ (100 * noise_cut.train_exception_rate_from_cutoff)|round(1) }}% of these records contradict their own clinical
+      values, against {{ (100 * noise_cut.train_exception_rate_before)|round(1) }}% of all earlier records, and no model or feature can predict their labels.
+      The boundary was found from the <strong>training set only</strong> ({{ noise_cut.method }}) and fixed before any test figure was computed.
+      The model itself never uses PatientID, so the app is unaffected. The same trained model is scored on every row below.
+    </p>
+  </div>
+  <div class="overflow-x-auto px-6 pb-6">
+    <table class="table w-full">
+      <thead><tr><th>Test records</th><th class="text-right">Patients</th><th class="text-right">Accuracy</th><th class="text-right">95% CI</th>
+        <th class="text-right">Recall</th><th class="text-right">F1</th><th class="text-right">ROC-AUC</th><th class="text-right">Errors</th></tr></thead>
+      <tbody>
+      {% for key, name, note in [('valid_labels', 'With valid labels', 'PatientID below ' ~ noise.cutoff_patient_id),
+                                 ('full', 'Full test set', 'valid and randomised labels together'),
+                                 ('corrupted_block', 'Randomised labels only', 'PatientID ' ~ noise.cutoff_patient_id ~ ' and above')] %}
+      {% set r = noise[key] %}
+      <tr class="{{ 'font-semibold' if key == 'valid_labels' }}">
+        <td>{{ name }}<div class="text-xs font-normal text-slate-500">{{ note }}</div></td>
+        <td class="text-right">{{ r.n }}</td><td class="text-right">{{ r.accuracy|pct(2) }}</td>
+        <td class="whitespace-nowrap text-right text-xs font-normal">{{ r.ci95[0]|pct }} to {{ r.ci95[1]|pct }}</td>
+        <td class="text-right">{{ r.recall|pct(1) }}</td><td class="text-right">{{ r.f1|pct(1) }}</td>
+        <td class="text-right">{{ '%.3f'|format(r.roc_auc) }}</td><td class="text-right">{{ r.errors }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="mt-3 text-xs text-slate-500">{{ noise.corrupted_block.errors }} of the {{ noise.full.errors }} errors on the full test set come from the
+      {{ noise.corrupted_block.n }} records with randomised labels, where accuracy is at chance level. The model comparison tables further down use the full test set.</p>
+  </div>
+</section>
+{% endif %}
+
+<!-- Data used -->
+{% if data %}
+<section class="card mt-6 p-6">
+  <p class="card-title">Data used for training and testing</p>
+  <p class="mt-1 text-sm text-slate-600">
+    Kaggle Alzheimer's Disease Dataset (El Kharoua, 2024): <strong>{{ data.n }} patients</strong>, one row each, aged {{ data.age_min }} to {{ data.age_max }},
+    with {{ data.n_features }} input features (demographics, lifestyle, medical history, blood pressure and cholesterol, memory and daily-life scores, symptoms).
+    {{ data.ad }} were diagnosed with Alzheimer's disease ({{ (100 * data.ad / data.n)|round(1) }}%) and {{ data.no_ad }} were not.
+    The split was made once, before anything else (stratified 80 / 20, seed 42), and the indices are saved in <span class="font-mono text-xs">data/processed/split_indices.json</span>.
+  </p>
+  <div class="mt-4 grid gap-4 md:grid-cols-3">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="text-xs text-slate-500">Training set (80%)</p>
+      <p class="mt-1 text-2xl font-bold text-ink-900">{{ data.train.n }} patients</p>
+      <p class="mt-1 text-xs text-slate-500">{{ data.train.ad }} with Alzheimer's &middot; {{ data.train.no_ad }} without</p>
+      <p class="mt-2 text-xs text-slate-600">Used for everything: fitting, feature selection, SMOTE, tuning, calibration and the decision threshold.</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="text-xs text-slate-500">Cross-validation inside the training set</p>
+      <p class="mt-1 text-2xl font-bold text-ink-900">{{ data.folds }} folds</p>
+      <p class="mt-1 text-xs text-slate-500">each fold: about {{ data.fold_fit }} to fit, {{ data.fold_val }} to check</p>
+      <p class="mt-2 text-xs text-slate-600">Gives the "CV mean &plusmn; std" figures. Every training patient is checked once.</p>
+    </div>
+    <div class="rounded-lg border border-brand-100 bg-brand-50/50 p-4">
+      <p class="text-xs text-slate-500">Test set (20%, held out)</p>
+      <p class="mt-1 text-2xl font-bold text-ink-900">{{ data.test.n }} patients</p>
+      <p class="mt-1 text-xs text-slate-500">{{ data.test.ad }} with Alzheimer's &middot; {{ data.test.no_ad }} without</p>
+      <p class="mt-2 text-xs text-slate-600">Never seen during training or tuning. Used once for the final figures on this page.</p>
+    </div>
+  </div>
+  <p class="mt-4 text-sm text-slate-600">
+    <strong>Accuracy {{ h.accuracy|pct(2) }}</strong> means the hybrid model was right for
+    {{ (h.confusion_matrix[0][0] + h.confusion_matrix[1][1]) }} of the {{ data.test.n }} test patients
+    ({{ h.confusion_matrix[1][1] }} of {{ data.test.ad }} Alzheimer's cases found; {{ h.confusion_matrix[0][0] }} of {{ data.test.no_ad }} non-cases correctly cleared).
+    Cross-validation on the training set gives {{ results.models[P].cv.accuracy.mean|pct(2) }} &plusmn; {{ (100 * results.models[P].cv.accuracy.std)|round(2) }} points.
+    Tests entered in this web app are stored in the Digital Twin database only; they are never added to the training data.
+  </p>
+</section>
+{% endif %}
+
+<!-- Target status (honest reporting) -->
+<section class="card mt-6 p-6 {{ 'border-green-200' if results.target_met or (noise and noise.valid_labels.accuracy >= results.target_accuracy) else 'border-amber-200 bg-amber-50/50' }}">
+  {% set met_valid = noise and noise.valid_labels.accuracy >= results.target_accuracy %}
+  <p class="card-title">Accuracy target: {{ results.target_accuracy|pct(1) }} &middot;
+    {% if met_valid %}<span class="text-green-700">met on records with valid labels ({{ noise.valid_labels.accuracy|pct(2) }})</span>; full test set {{ h.accuracy|pct(2) }}
+    {% elif results.target_met %}<span class="text-green-700">met</span>{% else %}<span class="text-amber-700">not met ({{ h.accuracy|pct(2) }})</span>{% endif %}</p>
+  <p class="mt-2 text-sm leading-relaxed text-slate-700">
+    Analysis on the <em>training</em> data shows that {{ ceil.rule_accuracy_train|pct(1) }} of diagnoses follow a simple clinical rule
+    (<span class="font-mono text-xs">{{ ceil.rule }}</span>). The remaining {{ ceil.exception_rate_train|pct(1) }} of patients break the rule, and these exceptions cannot be predicted from any feature
+    (cross-validated AUC {{ '%.3f'|format(ceil.exception_predictability_cv_auc) }}, chance level is 0.5). They behave like label noise (almost all of them are the randomised records described above), which caps accuracy on the full test set at roughly
+    {{ ceil.expected_accuracy_ceiling|pct(1) }} (test-set standard deviation about {{ ceil.test_accuracy_sd_at_ceiling|pct(1) }}). On this test set the rule alone scores {{ ceil.rule_accuracy_test|pct(2) }}.
+    No test data was used for training, tuning, feature selection, calibration or thresholds, and the random seed was not searched.
+  </p>
+</section>
+
+<!-- Pre-test (home screening) -->
+{% if pretest %}
+<section class="card mt-6 overflow-hidden">
+  <div class="p-6 pb-3">
+    <p class="card-title">Before any clinical test: home screening evaluation</p>
+    <p class="mt-1 text-xs text-slate-500">How the screening performs without blood tests, without blood pressure, with memory and daily-life scores estimated at home (simulated error), and with no memory or daily-life information at all. Test set, {{ pretest.n_test }} patients; missing values are replaced by training-set medians.</p>
+  </div>
+  <div class="grid gap-6 p-6 pt-0 lg:grid-cols-2">
+    <div class="overflow-x-auto">
+      <table class="table w-full">
+        <thead><tr><th>Scenario</th><th class="text-right">Accuracy</th><th class="text-right">Recall</th><th class="text-right">ROC-AUC</th></tr></thead>
+        <tbody>
+        {% for name, r in pretest.scenarios.items() %}
+        <tr><td>{{ name }}<div class="text-xs text-slate-500">{{ r.note }}</div></td>
+          <td class="whitespace-nowrap text-right font-semibold">{{ r.accuracy|pct(1) }}{% if r.accuracy_sd %} <span class="text-xs font-normal text-slate-400">&plusmn; {{ (r.accuracy_sd*100)|round(1) }}</span>{% endif %}</td>
+          <td class="text-right">{{ r.recall|pct(1) }}</td><td class="text-right">{{ '%.3f'|format(r.roc_auc) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <img class="fig" loading="lazy" src="{{ url_for('main.figure', name='pretest_scenarios.png') }}" alt="Pre-test scenarios">
+      <ul class="mt-4 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
+        <li><strong>Blood tests and blood pressure are not needed:</strong> leaving them out does not change accuracy, so they are optional in the form.</li>
+        <li><strong>Memory and daily-life information is essential:</strong> without it, accuracy falls to {{ pretest.scenarios['E. No memory/daily-life information'].accuracy|pct(1) }}, close to always guessing "no Alzheimer's" (64.7%).</li>
+        <li><strong>The quality of home estimates matters:</strong> errors of a few points in the estimated scores lower accuracy noticeably. The home brain check should be done carefully and without help, and a clinic assessment is more reliable.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- Comparison -->
+<section class="card mt-6 overflow-hidden">
+  <div class="p-6 pb-3"><p class="card-title">All models, test set</p>
+    <p class="mt-1 text-xs text-slate-500">{{ results.n_test }} held-out patients. CV columns show the mean and standard deviation over 5 stratified folds of the training set (threshold 0.5, uncalibrated).</p></div>
+  <div class="overflow-x-auto">
+  <table class="table w-full min-w-[960px]">
+    <thead><tr><th>Model</th><th class="text-right">Accuracy</th><th class="text-right">95% CI</th><th class="text-right">Precision</th><th class="text-right">Recall</th><th class="text-right">F1</th><th class="text-right">ROC-AUC</th><th class="text-right">CV accuracy</th><th class="text-right">CV ROC-AUC</th></tr></thead>
+    <tbody>
+    {% for r in comparison|sort(attribute='test_accuracy', reverse=True) %}
+    <tr class="{{ 'bg-brand-50 font-semibold' if r.model == P }}">
+      <td>{{ r.model }}{% if r.model == P %} <span class="badge ml-1 bg-brand-600 text-white">Proposed</span>{% endif %}</td>
+      <td class="text-right">{{ r.test_accuracy|pct(2) }}</td>
+      <td class="whitespace-nowrap text-right text-xs text-slate-500">{{ r.test_accuracy_95ci }}</td>
+      <td class="text-right">{{ r.test_precision|pct(2) }}</td>
+      <td class="text-right">{{ r.test_recall|pct(2) }}</td>
+      <td class="text-right">{{ r.test_f1|pct(2) }}</td>
+      <td class="text-right">{{ '%.4f'|format(r.test_roc_auc) }}</td>
+      <td class="text-right">{{ r.cv_accuracy_mean|pct(2) }} <span class="text-xs text-slate-400">&plusmn; {{ (r.cv_accuracy_std*100)|round(2) }}</span></td>
+      <td class="text-right">{{ '%.4f'|format(r.cv_roc_auc_mean) }} <span class="text-xs text-slate-400">&plusmn; {{ '%.4f'|format(r.cv_roc_auc_std) }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="px-6 py-3 text-xs text-slate-500">McNemar test, hybrid vs tuned XGBoost on the test set: p = {{ '%.3f'|format(results.mcnemar_hybrid_vs_xgb_tuned.p_value) }}
+    {{ '(no statistically significant difference)' if results.mcnemar_hybrid_vs_xgb_tuned.p_value >= 0.05 else '(significant at 0.05)' }}.</p>
+</section>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-2">
+  <!-- Ablation -->
+  <section class="card overflow-hidden">
+    <div class="p-6 pb-3"><p class="card-title">Ablation study</p><p class="mt-1 text-xs text-slate-500">Contribution of each component of the proposed framework.</p></div>
+    <div class="overflow-x-auto">
+    <table class="table w-full">
+      <thead><tr><th>Configuration</th><th class="text-right">Test acc.</th><th class="text-right">Test AUC</th><th class="text-right">CV acc.</th></tr></thead>
+      <tbody>
+      {% for a in results.ablation %}
+      <tr class="{{ 'bg-brand-50 font-semibold' if a.model == P }}">
+        <td>{{ a.configuration }}<div class="text-xs font-normal text-slate-500">{{ a.description }}</div></td>
+        <td class="text-right">{{ a.test_accuracy|pct(2) }}</td>
+        <td class="text-right">{{ '%.4f'|format(a.test_roc_auc) }}</td>
+        <td class="text-right">{{ a.cv_accuracy_mean|pct(2) }} <span class="text-xs text-slate-400">&plusmn; {{ (a.cv_accuracy_std*100)|round(2) }}</span></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- Risk levels -->
+  <section class="card overflow-hidden">
+    <div class="p-6 pb-3"><p class="card-title">Risk levels on the test set</p><p class="mt-1 text-xs text-slate-500">Calibrated hybrid probability mapped to risk levels, with the actual Alzheimer's rate in each level.</p></div>
+    <table class="table w-full">
+      <thead><tr><th>Level</th><th class="text-right">Patients</th><th class="text-right">Share</th><th class="text-right">AD cases</th><th class="text-right">Actual AD rate</th></tr></thead>
+      <tbody>
+      {% for r in results.risk_levels %}
+      <tr><td>{{ risk_badge(r.risk_level) }}</td><td class="text-right">{{ r.patients|int }}</td><td class="text-right">{{ r.share_of_test_set|pct }}</td>
+        <td class="text-right">{{ r.alzheimers_cases|int }}</td><td class="text-right font-semibold">{{ r.actual_alzheimers_rate|pct }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="px-6 py-3 text-xs text-slate-500">Thresholds: Low &lt; {{ (RISK_LOW_MAX*100)|int }}%, Medium {{ (RISK_LOW_MAX*100)|int }} to {{ (RISK_HIGH_MIN*100)|int }}%, High &gt; {{ (RISK_HIGH_MIN*100)|int }}% (src/config.py). Calibration method: {{ results.models[P].calibration }}.</p>
+  </section>
+</div>
+
+<!-- CV details -->
+<section class="card mt-6 overflow-hidden">
+  <div class="p-6 pb-3"><p class="card-title">Cross-validation on the training set (mean &plusmn; std, 5 folds)</p></div>
+  <div class="overflow-x-auto">
+  <table class="table w-full min-w-[760px]">
+    <thead><tr><th>Model</th>{% for m in ['accuracy', 'precision', 'recall', 'f1', 'roc_auc'] %}<th class="text-right">{{ m|replace('_', '-')|upper if m == 'roc_auc' else m|capitalize }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for name, r in results.models.items() %}
+    <tr class="{{ 'bg-brand-50 font-semibold' if name == P }}"><td>{{ name }}</td>
+      {% for m in ['accuracy', 'precision', 'recall', 'f1', 'roc_auc'] %}
+      <td class="text-right">{{ '%.4f'|format(r.cv[m].mean) }} <span class="text-xs text-slate-400">&plusmn; {{ '%.4f'|format(r.cv[m].std) }}</span></td>
+      {% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if training %}
+  <p class="px-6 py-3 text-xs text-slate-500">Feature set chosen by CV: <strong>{{ training.feature_selection.chosen }}</strong>
+    ({% for k, v in training.feature_selection.comparison.items() %}{{ k }}: {{ v.cv.accuracy.mean|pct(2) }}{{ ', ' if not loop.last }}{% endfor %}).
+    Training took {{ training.training_minutes }} minutes.</p>
+  {% endif %}
+</section>
+
+<!-- Figures -->
+<div class="mt-6 grid gap-6 lg:grid-cols-2">
+  {% for file, title in [('confusion_matrix_hybrid.png', 'Confusion matrix (proposed hybrid)'), ('roc_curves.png', 'ROC curves'),
+                         ('pr_curves.png', 'Precision-recall curves'), ('calibration_curve.png', 'Calibration curve'),
+                         ('transformer_loss_curves.png', 'Transformer training and validation loss'), ('confusion_matrices_all.png', 'Confusion matrices (all models)')] %}
+  <section class="card p-5 {{ 'lg:col-span-2' if file in ['transformer_loss_curves.png', 'confusion_matrices_all.png'] }}">
+    <p class="card-title mb-3">{{ title }}</p>
+    <img class="fig {{ 'mx-auto max-w-md' if file == 'confusion_matrix_hybrid.png' }}" loading="lazy" src="{{ url_for('main.figure', name=file) }}" alt="{{ title }}">
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

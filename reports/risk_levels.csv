@@ -1,0 +1,4 @@
+risk_level,patients,alzheimers_cases,actual_alzheimers_rate,share_of_test_set
+Low,281.0,11.0,0.0391,0.6535
+Medium,0.0,0.0,0.0,0.0
+High,149.0,141.0,0.9463,0.3465

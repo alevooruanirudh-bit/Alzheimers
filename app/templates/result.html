@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% from "_macros.html" import risk_badge, factor_list %}
+{% block title %}Prediction result{% endblock %}
+{% block heading %}Prediction result{% endblock %}
+{% block subheading %}{{ patient.name }} &middot; {{ pred.observation.recorded_at.strftime('%d %b %Y, %H:%M') }} &middot; model {{ pred.model_version }}{% endblock %}
+{% block content %}
+<div class="grid gap-6 lg:grid-cols-5">
+  <section class="card p-6 lg:col-span-2">
+    <div class="flex items-center justify-between">
+      <p class="card-title">Estimated risk</p>
+      {{ risk_badge(pred.risk_level, True) }}
+    </div>
+    <div class="relative mx-auto mt-4 max-w-xs">
+      <canvas id="gauge" height="170"></canvas>
+      <div class="pointer-events-none absolute inset-x-0 bottom-2 text-center">
+        <p class="text-4xl font-bold text-risk-{{ pred.risk_level }}">{{ pred.probability|pct }}</p>
+        <p class="text-xs text-slate-500">calibrated probability of Alzheimer's</p>
+      </div>
+    </div>
+    <div class="mt-4 flex justify-between text-[11px] text-slate-500">
+      <span>0%</span><span class="text-green-700">Low &lt; {{ (RISK_LOW_MAX*100)|int }}%</span><span class="text-amber-700">Medium</span><span class="text-red-700">High &gt; {{ (RISK_HIGH_MIN*100)|int }}%</span><span>100%</span>
+    </div>
+    <dl class="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-sm">
+      <div><dt class="text-xs text-slate-500">Screening classification</dt>
+        <dd class="font-semibold">{{ 'Alzheimer\'s pattern' if pred.predicted_label else 'No Alzheimer\'s pattern' }}</dd></div>
+      <div><dt class="text-xs text-slate-500">Decision threshold</dt><dd class="font-semibold">{{ res.threshold|pct(0) }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="card p-6 lg:col-span-3">
+    <p class="card-title">Summary</p>
+    <p class="mt-3 text-sm leading-relaxed text-slate-700">
+      The hybrid model estimates a <strong>{{ pred.probability|pct }}</strong> probability that this profile matches patients diagnosed with
+      Alzheimer's disease in the research dataset, which places it in the <strong class="text-risk-{{ pred.risk_level }}">{{ pred.risk_level|lower }} risk</strong> band.
+      {% if res.top_increasing %}The strongest factor raising the estimate was: {{ res.top_increasing[0].text|lower }}.{% endif %}
+      {% if res.top_decreasing %}The strongest factor lowering it was: {{ res.top_decreasing[0].text|lower }}.{% endif %}
+    </p>
+    <div class="mt-5 grid gap-6 md:grid-cols-2">
+      <div><p class="mb-3 text-xs font-semibold uppercase tracking-wider text-red-700">Pushing risk up</p>{{ factor_list(res.top_increasing, 'up') }}</div>
+      <div><p class="mb-3 text-xs font-semibold uppercase tracking-wider text-green-700">Pushing risk down</p>{{ factor_list(res.top_decreasing, 'down') }}</div>
+    </div>
+    <div class="mt-6 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
+      <button type="button" id="readAloud" class="btn btn-primary">Read the result aloud</button>
+      <a href="{{ url_for('main.explain', prediction_id=pred.id) }}" class="btn btn-secondary">View full explanation</a>
+      <a href="{{ url_for('main.patient_view', patient_id=patient.id) }}" class="btn btn-secondary">Open Digital Twin and trends</a>
+      {% if user and user.patient_id == patient.id and pred.observation.kind_label == 'home' %}
+      <a href="{{ url_for('main.clinical_test') }}" class="btn btn-secondary">Verify with a clinical report (Level 2)</a>
+      {% endif %}
+    </div>
+    <p class="mt-4 text-xs text-slate-500">Research-based risk screening only. Not a medical diagnosis.</p>
+  </section>
+  {% if pred.observation.inputs.Age < 60 %}
+  <section class="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 lg:col-span-5">
+    <strong>Age {{ pred.observation.inputs.Age|int }}: early-onset range.</strong> Alzheimer's that starts before 65 is less common and often runs in families. The research data behind this tool only includes people aged 60 to 90, so the model used age 60 and this result is less certain. If you are worried, please see a doctor and mention any family history of dementia.
+  </section>
+  {% endif %}
+  <section class="card p-6 lg:col-span-5">
+    <p class="card-title">How this estimate was made</p>
+    {% set i = pred.observation.inputs %}
+    <div class="mt-4 grid gap-6 md:grid-cols-3">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Memory, thinking and daily life</p>
+        <p class="mt-1 text-sm text-slate-700">{{ assessment.label }}{% if (pred.observation.inputs._assessment or {}).voice_used %} (answered with voice help){% endif %}</p>
+        <dl class="mt-3 space-y-1.5 text-sm">
+          <div class="flex justify-between"><dt class="text-slate-500">Memory and thinking (MMSE scale)</dt><dd class="font-semibold">{{ '%g'|format(i.MMSE|round(1)) }} / 30</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">Everyday tasks</dt><dd class="font-semibold">{{ '%g'|format(i.FunctionalAssessment|round(1)) }} / 10</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">Self-care</dt><dd class="font-semibold">{{ '%g'|format(i.ADL|round(1)) }} / 10</dd></div>
+        </dl>
+        {% if assessment.mode == 'questions' %}
+        <p class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">These scores were estimated from home questions. They are less certain than scores measured at a clinic, and the model's reported accuracy was measured with clinic scores.</p>
+        {% endif %}
+      </div>
+      <div>
+        {% if assessment.brain_check %}
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Brain check results</p>
+        <table class="mt-2 w-full text-sm">
+          {% for key, name, mx in brain_domains %}
+          <tr class="border-b border-slate-100"><td class="py-1 text-slate-600">{{ name }}</td><td class="py-1 text-right font-medium">{{ assessment.brain_check[key] }} / {{ mx }}</td></tr>
+          {% endfor %}
+        </table>
+        {% else %}
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Brain check</p>
+        <p class="mt-1 text-sm text-slate-600">Not used, because scores were entered directly.</p>
+        {% endif %}
+      </div>
+      <div>
+        {% if res.adjusted %}
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Outside the research data</p>
+        <ul class="mb-4 mt-1 space-y-1 text-sm text-slate-700">
+          {% for a in res.adjusted %}<li>{{ a.label }}: {{ '%g'|format(a.given) }} given; the model used {{ '%g'|format(a.used) }}, the nearest value it was trained on.</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if i._body %}
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Body size</p>
+        <p class="mb-4 mt-1 text-sm text-slate-700">Height {{ i._body.height_cm }} cm, weight {{ i._body.weight_kg }} kg, so BMI {{ i.BMI }}.</p>
+        {% endif %}
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Health check numbers</p>
+        {% if assessment.missing %}
+        <details class="mt-1 text-sm text-slate-700"><summary class="cursor-pointer">{{ assessment.missing|length }} optional detail{{ 's' if assessment.missing|length != 1 }} not given; typical values were used.</summary><p class="mt-1 text-xs text-slate-500">{{ assessment.missing|join(', ') }}.</p></details>
+        <p class="mt-2 text-xs text-slate-500">Typical values from the research data were used instead. In this model these measurements have very little effect on the result (see the model performance page).</p>
+        {% else %}
+        <p class="mt-1 text-sm text-slate-700">All provided.</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+{% set spoken %}The estimated risk is {{ (pred.probability*100)|round|int }} percent. This is {{ pred.risk_level|lower }} risk.
+{% if res.top_increasing %}The main thing raising the risk: {{ res.top_increasing[0].text }}.{% endif %}
+{% if res.top_decreasing %}The main thing lowering the risk: {{ res.top_decreasing[0].text }}.{% endif %}
+{% if pred.observation.inputs.Age < 60 %}Because the person is under sixty, this result is less certain.{% endif %}
+This is a research screening only, not a medical diagnosis. If you are worried about memory or behaviour, please see a doctor.{% endset %}
+<script>
+  document.getElementById('readAloud').addEventListener('click', () => {
+    if (!('speechSynthesis' in window)) return alert('This browser cannot read aloud.');
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance({{ spoken|replace('\n', ' ')|tojson }});
+    const v = speechSynthesis.getVoices().find(v => v.lang === 'en-IN') || speechSynthesis.getVoices().find(v => v.lang.startsWith('en'));
+    if (v) u.voice = v;
+    u.lang = v ? v.lang : 'en-IN'; u.rate = 0.92;
+    speechSynthesis.speak(u);
+  });
+</script>
+<script>
+  const p = {{ pred.probability }};
+  new Chart(document.getElementById('gauge'), {
+    type: 'doughnut',
+    data: { datasets: [
+      { data: [p, 1 - p], backgroundColor: [{Low: '#16a34a', Medium: '#f59e0b', High: '#dc2626'}['{{ pred.risk_level }}'], '#e2e8f0'], borderWidth: 0, weight: 3 },
+      { data: [{{ RISK_LOW_MAX }}, {{ RISK_HIGH_MIN - RISK_LOW_MAX }}, {{ 1 - RISK_HIGH_MIN }}], backgroundColor: ['#bbf7d0', '#fde68a', '#fecaca'], borderWidth: 0, weight: 0.6 },
+    ]},
+    options: { rotation: -90, circumference: 180, cutout: '68%', responsive: true,
+               plugins: { legend: { display: false }, tooltip: { enabled: false } }, aspectRatio: 1.8 },
+  });
+</script>
+{% endblock %}

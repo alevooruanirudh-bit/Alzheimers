@@ -1,0 +1,144 @@
+Rows: 2149  features: 32
+Train: 1719  Test: 430
+Positive rate  train=0.354  test=0.353
+Saved split to /Users/vap-purnvasu/Desktop/Alzheimers/alzheimers-digital-twin/data/processed/split_indices.json
+Shape: (2149, 33)
+
+Class balance (0 = no Alzheimer's, 1 = Alzheimer's):
+  0: 1389 (64.6%)
+  1: 760 (35.4%)
+
+Missing values: 0 in total
+
+Duplicate rows: 0
+
+Numerical summary:
+                            mean     std     min     max
+Age                        74.91    8.99   60.00   90.00
+BMI                        27.66    7.22   15.01   39.99
+AlcoholConsumption         10.04    5.76    0.00   19.99
+PhysicalActivity            4.92    2.86    0.00    9.99
+DietQuality                 4.99    2.91    0.01   10.00
+SleepQuality                7.05    1.76    4.00   10.00
+SystolicBP                134.26   25.95   90.00  179.00
+DiastolicBP                89.85   17.59   60.00  119.00
+CholesterolTotal          225.20   42.54  150.09  299.99
+CholesterolLDL            124.34   43.37   50.23  199.97
+CholesterolHDL             59.46   23.14   20.00   99.98
+CholesterolTriglycerides  228.28  101.99   50.41  399.94
+MMSE                       14.76    8.61    0.01   29.99
+FunctionalAssessment        5.08    2.89    0.00   10.00
+ADL                         4.98    2.95    0.00   10.00
+
+Correlation with Diagnosis (top 10 by |r|):
+FunctionalAssessment       0.365
+ADL                        0.332
+MemoryComplaints           0.307
+MMSE                       0.237
+BehavioralProblems         0.224
+SleepQuality               0.057
+EducationLevel             0.044
+CholesterolHDL             0.043
+Hypertension               0.035
+FamilyHistoryAlzheimers    0.033
+Name: Diagnosis, dtype: float64
+
+Figures saved to /Users/vap-purnvasu/Desktop/Alzheimers/alzheimers-digital-twin/reports/figures
+Training patients: 1719  (positive rate 0.354)
+
+[1/6] Baselines on raw features
+  Logistic Regression    CV acc 0.8360
+  SVM (RBF)              CV acc 0.8488
+  Random Forest          CV acc 0.9389
+  XGBoost (plain)        CV acc 0.9477
+
+[2/6] Feature set comparison (full engineered vs selected)
+  raw                  CV acc 0.9442  logloss 0.2195  n_feat [32, 32, 32, 32, 32]
+  engineered_full      CV acc 0.9570  logloss 0.2021  n_feat [47, 47, 47, 47, 47]
+  engineered_selected  CV acc 0.9564  logloss 0.1913  n_feat [13, 12, 12, 12, 14]
+  -> using 'engineered_full'
+
+[3/6] Tuned XGBoost on engineered features (Optuna)
+  [xgb_tuned] best CV log-loss=0.1798  CV acc=0.9570  (100 trials)
+  [xgb_tuned] calibration=platt (CV Brier {'isotonic': 0.04155590583163357, 'platt': 0.04146740461632624, 'uncalibrated': 0.04143678044576426}), threshold=0.50
+
+[4/6] FT-Transformer: Optuna tuning + out-of-fold training
+  [transformer] best CV log-loss=0.1770 (20 trials)
+  best params: {'d': 16, 'n_layers': 1, 'n_heads': 4, 'ff_mult': 2.035865469934932, 'attn_dropout': 0.1858484924066442, 'ff_dropout': 0.2881747250804931, 'lr': 0.00027958915848509116, 'weight_decay': 7.905020544826117e-05, 'batch_size': 32, 'class_weight': False}
+    fold 1: best epoch 32, alignment R2=0.992
+    fold 2: best epoch 39, alignment R2=0.994
+    fold 3: best epoch 25, alignment R2=0.995
+    fold 4: best epoch 23, alignment R2=0.994
+    fold 5: best epoch 20, alignment R2=0.995
+  [transformer] calibration=platt (CV Brier {'isotonic': 0.043243714864018706, 'platt': 0.04169397338407559, 'uncalibrated': 0.041602584590356574}), threshold=0.50
+
+[5/6] Proposed hybrid: Transformer embeddings + tuned XGBoost
+  [hybrid] best CV log-loss=0.1782  CV acc=0.9570  (100 trials)
+  [hybrid] calibration=platt (CV Brier {'isotonic': 0.042408487529987084, 'platt': 0.04154112593684044, 'uncalibrated': 0.04139567602345082}), threshold=0.50
+
+[6/6] Ablation: hybrid WITHOUT feature engineering
+    fold 1: best epoch 62, alignment R2=0.948
+    fold 2: best epoch 125, alignment R2=0.978
+    fold 3: best epoch 85, alignment R2=0.979
+    fold 4: best epoch 39, alignment R2=0.904
+    fold 5: best epoch 134, alignment R2=0.973
+  [transformer_raw] calibration=platt (CV Brier {'isotonic': 0.05494972663481088, 'platt': 0.05317580196244743, 'uncalibrated': 0.053065349783392224}), threshold=0.48
+  [hybrid_nofe] best CV log-loss=0.2057  CV acc=0.9383  (100 trials)
+  [hybrid_nofe] calibration=platt (CV Brier {'isotonic': 0.05393000939758846, 'platt': 0.05212094495631732, 'uncalibrated': 0.05187712138342839}), threshold=0.69
+
+Done in 54.5 min. CV summary:
+                             model  cv_acc_mean  cv_acc_std
+               Logistic Regression       0.8360      0.0172
+                         SVM (RBF)       0.8488      0.0173
+                     Random Forest       0.9389      0.0229
+                   XGBoost (plain)       0.9477      0.0161
+                   XGBoost (tuned)       0.9570      0.0126
+                    FT-Transformer       0.9570      0.0126
+      Hybrid Transformer + XGBoost       0.9570      0.0126
+            FT-Transformer (no FE)       0.9383      0.0160
+Hybrid without feature engineering       0.9383      0.0140
+Test patients: 430  (positive rate 0.353)
+
+Logistic Regression                  acc 0.8163  f1 0.7375  auc 0.8865  (CV acc 0.8360 +/- 0.0172)
+SVM (RBF)                            acc 0.8488  f1 0.7811  auc 0.9000  (CV acc 0.8488 +/- 0.0173)
+Random Forest                        acc 0.9419  f1 0.9153  auc 0.9422  (CV acc 0.9389 +/- 0.0229)
+XGBoost (plain)                      acc 0.9419  f1 0.9158  auc 0.9436  (CV acc 0.9477 +/- 0.0161)
+XGBoost (tuned)                      acc 0.9558  f1 0.9369  auc 0.9534  (CV acc 0.9570 +/- 0.0126)
+FT-Transformer                       acc 0.9558  f1 0.9369  auc 0.9463  (CV acc 0.9570 +/- 0.0126)
+Hybrid Transformer + XGBoost         acc 0.9558  f1 0.9369  auc 0.9447  (CV acc 0.9570 +/- 0.0126)
+FT-Transformer (no FE)               acc 0.9488  f1 0.9272  auc 0.9371  (CV acc 0.9383 +/- 0.0160)
+Hybrid without feature engineering   acc 0.9465  f1 0.9226  auc 0.9498  (CV acc 0.9383 +/- 0.0140)
+
+Ablation:
+                      configuration  test_accuracy  cv_accuracy_mean
+                 Transformer alone         0.9558            0.9570
+                     XGBoost alone         0.9558            0.9570
+Hybrid without feature engineering         0.9465            0.9383
+            Full hybrid (proposed)         0.9558            0.9570
+
+Risk levels (proposed hybrid, test set):
+ risk_level  patients  alzheimers_cases  actual_alzheimers_rate  share_of_test_set
+       Low     281.0              11.0                  0.0391             0.6535
+    Medium       0.0               0.0                  0.0000             0.0000
+      High     149.0             141.0                  0.9463             0.3465
+
+McNemar hybrid vs tuned XGBoost: p = 1.000
+Label-noise ceiling (train): rule acc 0.9570, exception AUC 0.515; rule acc on test 0.9558
+
+Proposed hybrid test accuracy 0.9558 -> target 98.1% met: False
+/Users/vap-purnvasu/Desktop/Alzheimers/alzheimers-digital-twin/.venv/lib/python3.10/site-packages/numpy/lib/nanfunctions.py:1384: RuntimeWarning: All-NaN slice encountered
+  return _nanquantile_unchecked(
+/Users/vap-purnvasu/Desktop/Alzheimers/alzheimers-digital-twin/src/predictor.py:151: UserWarning: Tight layout not applied. The left and right margins cannot be made large enough to accommodate all Axes decorations.
+  fig.tight_layout()
+
+Explainability: Transformer share of hybrid |SHAP| = 85.0%; attention-vs-SHAP Spearman = 0.06
+Top hybrid SHAP features: Transformer embedding, ImpairmentDomainCount__x__MMSE_Impaired, AlcoholConsumption, CholesterolTotal, Age, Transformer risk score
+Top attention features:   ImpairmentDomainCount__x__MMSE_Impaired, HeadInjury, Age, MMSE_Impaired__x__FA_Low, ImpairmentDomainCount, Hypertension
+  Demo patient 01: High    96.0%  visits=4  (+ simulated follow-ups)
+  Demo patient 02: Low      6.8%  visits=4  (+ simulated follow-ups)
+  Demo patient 03: Low      2.7%  visits=1  
+  Demo patient 04: Low      4.5%  visits=4  (+ simulated follow-ups)
+  Demo patient 05: High    95.6%  visits=1  
+  Demo patient 06: High    96.1%  visits=1  
+Seeded 6 demo twins into sqlite:////Users/vap-purnvasu/Desktop/Alzheimers/alzheimers-digital-twin/database/digital_twin.db
+PIPELINE_EXIT=0

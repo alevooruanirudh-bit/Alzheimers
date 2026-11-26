@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block heading %}Overview{% endblock %}
+{% block subheading %}An explainable hybrid Digital Twin framework for early Alzheimer's risk screening{% endblock %}
+{% block content %}
+<section class="card overflow-hidden">
+  <div class="grid gap-6 p-6 md:grid-cols-5 md:p-8">
+    <div class="md:col-span-3">
+      <p class="text-xs font-semibold uppercase tracking-wider text-brand-600">Final-year research project</p>
+      <h2 class="mt-2 text-2xl font-bold leading-tight text-ink-900 md:text-3xl">An Explainable Hybrid Digital Twin Framework Using Transformer and XGBoost for Early Alzheimer's Disease Prediction</h2>
+      <p class="mt-4 text-sm leading-relaxed text-slate-600">
+        A tabular FT-Transformer learns a compact representation of each patient's clinical, lifestyle and cognitive profile.
+        That representation is combined with clinically meaningful engineered features and passed to a tuned XGBoost model,
+        which makes the final, calibrated risk estimate. SHAP explains every prediction, and each patient's history is kept
+        in a Digital Twin so risk can be tracked over time and explored with what-if simulation.
+      </p>
+      <div class="mt-6 flex flex-wrap gap-3">
+        {% if user and user.is_researcher %}
+        <a href="{{ url_for('main.twins') }}" class="btn btn-primary">All Digital Twins</a>
+        {% elif user %}
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">My Digital Twin</a>
+        <a href="{{ url_for('main.home_test') }}" class="btn btn-secondary">Take a test</a>
+        {% else %}
+        <a href="{{ url_for('auth.register') }}" class="btn btn-primary">Create an account</a>
+        <a href="{{ url_for('auth.login') }}" class="btn btn-secondary">Log in</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="md:col-span-2">
+      {% if results %}
+      {% set h = valid or results.models[results.proposed_model].test %}
+      <div class="grid grid-cols-2 gap-3">
+        {% for label, val in [('Accuracy', h.accuracy), ('ROC-AUC', h.roc_auc), ('F1-score', h.f1), ('Recall', h.recall)] %}
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-xs text-slate-500">{{ label }}</p>
+          <p class="mt-1 text-2xl font-bold text-ink-900">{{ val|pct(2) }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="mt-3 text-xs text-slate-500">Proposed hybrid model{% if valid %}, records with valid labels{% endif %}.
+        <a class="font-medium text-brand-600 hover:underline" href="{{ url_for('main.performance') }}">Full results</a></p>
+      {% else %}
+      <div class="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">No evaluation results yet. Run <code>python -m src.train</code> and <code>python -m src.evaluate</code>.</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<h3 class="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-slate-500">How it works</h3>
+<section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+  {% for n, title, text in [
+    (1, 'Patient data', '32 clinical, lifestyle, cognitive and symptom inputs from the Kaggle Alzheimer\'s dataset (2,149 patients).'),
+    (2, 'Feature engineering', 'Clinical composites: cognitive/functional score, symptom count, cardiovascular risk count, LDL/HDL ratio, pulse pressure, MMSE impairment flag and interactions.'),
+    (3, 'FT-Transformer', 'Each feature becomes a token; self-attention learns how features relate. The [CLS] token summarises the patient as a short numeric embedding (16 numbers in the tuned model).'),
+    (4, 'Hybrid XGBoost', 'XGBoost receives engineered features plus the Transformer embedding and makes the final prediction, which is then calibrated into a risk percentage.'),
+    (5, 'Explain and track', 'SHAP shows which factors raised or lowered the risk. The Digital Twin stores every visit and supports what-if simulation.')
+  ] %}
+  <div class="card p-5">
+    <div class="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-sm font-bold text-brand-700">{{ n }}</div>
+    <p class="mt-3 font-semibold text-ink-900">{{ title }}</p>
+    <p class="mt-1.5 text-sm leading-relaxed text-slate-600">{{ text }}</p>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="mt-8 grid gap-4 lg:grid-cols-3">
+  <div class="card p-6 lg:col-span-2">
+    <p class="card-title">Risk levels</p>
+    <p class="mt-1 text-sm text-slate-600">The model outputs a calibrated probability of Alzheimer's disease, which is mapped to a screening level.</p>
+    <div class="mt-4 grid gap-3 sm:grid-cols-3">
+      <div class="rounded-lg border border-green-200 bg-green-50 p-4"><span class="badge risk-Low">Low risk</span><p class="mt-2 text-sm text-slate-700">Probability below {{ (RISK_LOW_MAX*100)|int }}%</p></div>
+      <div class="rounded-lg border border-amber-200 bg-amber-50 p-4"><span class="badge risk-Medium">Medium risk</span><p class="mt-2 text-sm text-slate-700">{{ (RISK_LOW_MAX*100)|int }}% to {{ (RISK_HIGH_MIN*100)|int }}%</p></div>
+      <div class="rounded-lg border border-red-200 bg-red-50 p-4"><span class="badge risk-High">High risk</span><p class="mt-2 text-sm text-slate-700">Above {{ (RISK_HIGH_MIN*100)|int }}%</p></div>
+    </div>
+  </div>
+  <div class="card border-amber-200 bg-amber-50/60 p-6">
+    <p class="card-title">Disclaimer</p>
+    <p class="mt-2 text-sm leading-relaxed text-slate-700">This system is a research prototype for risk <em>screening</em> trained on a public, synthetic research dataset. It is <strong>not a medical diagnosis</strong> and must not be used to make clinical decisions. Anyone concerned about memory or cognition should consult a qualified clinician.</p>
+  </div>
+</section>
+{% endblock %}

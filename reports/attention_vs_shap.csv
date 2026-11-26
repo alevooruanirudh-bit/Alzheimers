@@ -1,0 +1,11 @@
+rank,top_by_attention,attention,top_by_shap,mean_abs_shap
+1,Number of impaired functional/behavioural domains x MMSE below 24 (impaired range),0.1555,Number of impaired functional/behavioural domains x MMSE below 24 (impaired range),0.2555
+2,Head injury history,0.0661,Alcohol consumption,0.0341
+3,Age,0.0315,Total cholesterol,0.0306
+4,MMSE below 24 (impaired range) x Functional assessment below 5,0.0306,Age,0.0277
+5,Number of impaired functional/behavioural domains,0.0264,Everyday tasks score (functional assessment),0.0155
+6,Hypertension,0.0255,Number of cardiovascular risk factors,0.0117
+7,Memory complaints,0.0255,BMI,0.0106
+8,Cardiovascular disease,0.0251,HDL cholesterol,0.0097
+9,Behavioural problems,0.0232,Number of impaired functional/behavioural domains x Functional assessment below 5,0.0084
+10,Disorientation,0.023,LDL cholesterol,0.0074

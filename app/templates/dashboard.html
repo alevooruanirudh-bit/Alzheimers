@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+{% from "_macros.html" import risk_badge %}
+{% block title %}{{ p.name }}{% endblock %}
+{% block heading %}{{ p.name }}{% if relation %} <span class="font-normal text-slate-500">({{ relation }})</span>{% endif %}{% endblock %}
+{% block subheading %}{{ summary.count }} test{{ 's' if summary.count != 1 }} recorded{% if owner %} &middot; account {{ owner.username }}{% endif %}{% endblock %}
+{% block header_actions %}{% if is_owner %}<a href="{{ url_for('main.home_test') }}" class="btn btn-primary">Take a home check<span class="hidden sm:inline">&nbsp;for {{ p.name.split()[0] }}</span></a>{% endif %}{% endblock %}
+
+{% macro verdict_badge(v) -%}
+{% set cls = {'Improving': 'risk-Low', 'Possibly improving': 'risk-Low', 'Stable': 'bg-sky-100 text-sky-800',
+              'Possibly worsening': 'risk-Medium', 'Worsening': 'risk-High'}[v] %}
+<span class="badge {{ cls }} px-3 py-1 text-sm">{{ v }}</span>
+{%- endmacro %}
+{% macro kind_badge(kind, simulated=False) -%}
+{% if simulated %}<span class="badge badge-sim">Simulated demo visit</span>
+{% elif kind == 'home' %}<span class="badge bg-teal-50 text-teal-800">Home check</span>
+{% else %}<span class="badge bg-indigo-50 text-indigo-800">Clinical report</span>{% endif %}
+{%- endmacro %}
+
+{% block content %}
+{% if p.is_demo %}
+<div class="mb-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+  <strong>Demo twin.</strong> The first visit is a real record from the held-out test set ({{ p.source }}). Visits marked
+  <span class="badge badge-sim">Simulated demo visit</span> were generated to demonstrate trends and are not real patient data.
+</div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <!-- Latest risk -->
+  <section class="card p-6">
+    <p class="card-title">Latest risk</p>
+    {% if latest %}
+    <div class="mt-4 flex items-end gap-3">
+      <p class="text-5xl font-bold text-risk-{{ latest.risk_level }}">{{ latest.probability|pct }}</p>
+      <div class="pb-2">{{ risk_badge(latest.risk_level) }}</div>
+    </div>
+    <div class="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full dot-{{ latest.risk_level }}" style="width: {{ (latest.probability*100)|round(1) }}%"></div></div>
+    <dl class="mt-5 space-y-2 text-sm">
+      <div class="flex justify-between gap-3"><dt class="text-slate-500">When</dt><dd>{{ latest.observation.recorded_at.strftime('%d %b %Y, %H:%M') }}</dd></div>
+      <div class="flex justify-between gap-3"><dt class="text-slate-500">From</dt><dd>{{ kind_badge(latest.observation.kind_label, latest.observation.is_simulated) }}</dd></div>
+      <div class="flex justify-between gap-3"><dt class="text-slate-500">Scores</dt><dd class="text-right text-xs">{{ assessment.label }}</dd></div>
+    </dl>
+    <a href="{{ url_for('main.result', prediction_id=latest.id) }}" class="btn btn-secondary mt-5 w-full">Open result and explanation</a>
+    {% else %}
+    <p class="mt-3 text-sm text-slate-600">No tests yet.</p>
+    {% if is_owner %}<a href="{{ url_for('main.home_test') }}" class="btn btn-primary mt-4 w-full">Take the first home check</a>{% endif %}
+    {% endif %}
+  </section>
+
+  <!-- Levels -->
+  <section class="card p-6">
+    <p class="card-title">Tests</p>
+    <ol class="mt-4 space-y-4 text-sm">
+      <li class="rounded-lg border border-slate-200 p-3">
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-semibold text-ink-900">Level 1: Home check</p>
+          {% if levels.home and not levels.due %}<span class="badge risk-Low">Up to date</span>{% elif levels.home %}<span class="badge risk-Medium">Due again</span>{% else %}<span class="badge bg-slate-100 text-slate-600">Not done</span>{% endif %}
+        </div>
+        <p class="mt-1 text-xs text-slate-500">{{ levels.home }} done{% if levels.last_home %}, last on {{ levels.last_home.strftime('%d %b %Y') }}{% endif %}. Suggested every {{ retest_days }} days to follow changes.</p>
+        {% if is_owner %}<a href="{{ url_for('main.home_test') }}" class="mt-2 inline-block font-medium text-brand-600 hover:underline">{{ 'Take it again' if levels.home else 'Start' }}</a>{% endif %}
+      </li>
+      <li class="rounded-lg border border-slate-200 p-3 {{ 'opacity-60' if not levels.home }}">
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-semibold text-ink-900">Level 2: Clinical report</p>
+          <span class="badge bg-slate-100 text-slate-600">{{ levels.clinical }} added</span>
+        </div>
+        <p class="mt-1 text-xs text-slate-500">Blood pressure, blood tests and a doctor's memory scores verify the home check.</p>
+        {% if is_owner %}{% if levels.home %}<a href="{{ url_for('main.clinical_test') }}" class="mt-2 inline-block font-medium text-brand-600 hover:underline">Add a clinical report</a>{% else %}<p class="mt-2 text-xs text-slate-400">Available after the first home check.</p>{% endif %}{% endif %}
+      </li>
+      <li class="rounded-lg border border-slate-200 p-3">
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-semibold text-ink-900">Scan reports</p>
+          <span class="badge bg-slate-100 text-slate-600">{{ levels.scans }} added</span>
+        </div>
+        <p class="mt-1 text-xs text-slate-500">MRI, CT or PET reports kept in the record (not used by the model).</p>
+        {% if is_owner %}<a href="{{ url_for('main.scan_new') }}" class="mt-2 inline-block font-medium text-brand-600 hover:underline">Add a scan report</a>{% endif %}
+      </li>
+    </ol>
+  </section>
+
+  <!-- Profile -->
+  <section class="card p-6">
+    <div class="flex items-center justify-between"><p class="card-title">Profile</p>{% if is_owner %}<a href="{{ url_for('main.profile') }}" class="text-sm font-medium text-brand-600 hover:underline">Edit profile</a>{% endif %}</div>
+    {% if prof %}
+    <dl class="mt-4 space-y-2 text-sm">
+      {% for label, val in prof_rows %}<div class="flex justify-between gap-4"><dt class="text-slate-500">{{ label }}</dt><dd class="text-right font-medium">{{ val }}</dd></div>{% endfor %}
+    </dl>
+    {% if prof.height_assumed %}<p class="mt-3 text-xs text-slate-400">Height was not recorded in the original data, so 165 cm is assumed; BMI is from the record.</p>{% endif %}
+    {% else %}
+    <p class="mt-3 text-sm text-slate-500">This twin was created before profiles existed. Details are taken from its latest test.</p>
+    {% endif %}
+  </section>
+
+  <!-- Trend status -->
+  <section class="card p-6 lg:col-span-3">
+    <p class="card-title">How things are changing</p>
+    {% if summary.since_previous %}
+    <div class="mt-4 grid gap-4 md:grid-cols-2">
+      {% for title, c in [('Since the previous test', summary.since_previous), ('Since the first test', summary.since_first)] if c %}
+      <div class="rounded-lg border border-slate-200 p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p class="text-sm font-semibold text-ink-900">{{ title }}</p>{{ verdict_badge(c.verdict) }}
+        </div>
+        <p class="mt-2 text-sm text-slate-600">Over {{ c.days }} days ({{ c.a.when.strftime('%d %b %Y') }} to {{ c.b.when.strftime('%d %b %Y') }}), {{ c.why }}: risk {{ c.rows[0].before }} to {{ c.rows[0].after }}.</p>
+        {% for r in c.rows[1:4] if r.direction in ['Better', 'Worse'] %}
+        <p class="mt-1 text-xs {{ 'text-green-700' if r.direction == 'Better' else 'text-red-700' }}">{{ r.name }}: {{ r.before }} to {{ r.after }} ({{ r.direction|lower }}){% if r.per_year is not none %}, about {{ '%+.1f'|format(r.per_year) }} points per year{% endif %}</p>
+        {% endfor %}
+        {% for n in c.notes %}<p class="mt-2 text-xs text-slate-400">{{ n }}</p>{% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="mt-3 rounded-lg border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">Trends appear after two or more tests. Each test is saved with its date and time, so changes can be followed over weeks and months.</p>
+    {% endif %}
+  </section>
+
+  {% if compare %}
+  <!-- Compare any two tests -->
+  <section class="card overflow-hidden lg:col-span-3" id="compare">
+    <form method="get" action="#compare" class="flex flex-wrap items-end gap-3 p-6 pb-4">
+      <div class="mr-auto"><p class="card-title">Compare any two tests</p><p class="mt-1 text-xs text-slate-500">Pick two dates to see what changed in between.</p></div>
+      {% for key, label, sel in [('a', 'From', compare.a.prediction_id), ('b', 'To', compare.b.prediction_id)] %}
+      <label class="text-xs text-slate-500">{{ label }}
+        <select name="{{ key }}" class="field-input mt-1 w-64" onchange="this.form.submit()">
+          {% for r in recs|reverse %}<option value="{{ r.prediction_id }}" {{ 'selected' if r.prediction_id == sel }}>{{ r.when.strftime('%d %b %Y %H:%M') }} &middot; {{ 'Home' if r.kind == 'home' else 'Clinical' }} &middot; {{ r.risk_level }}</option>{% endfor %}
+        </select>
+      </label>
+      {% endfor %}
+      <noscript><button class="btn btn-secondary">Compare</button></noscript>
+    </form>
+    <div class="flex flex-wrap items-center gap-3 px-6 pb-3 text-sm">{{ verdict_badge(compare.verdict) }}<span class="text-slate-600">{{ compare.days }} days apart: {{ compare.why }}.</span></div>
+    <div class="overflow-x-auto">
+      <table class="table w-full min-w-[640px]">
+        <thead><tr><th>Measure</th><th class="text-right">{{ compare.a.when.strftime('%d %b %Y') }}</th><th class="text-right">{{ compare.b.when.strftime('%d %b %Y') }}</th><th class="text-right">Change</th><th>Meaning</th></tr></thead>
+        <tbody>
+        {% for r in compare.rows %}
+        <tr><td>{{ r.name }}{% if r.unit %} <span class="text-xs text-slate-400">{{ r.unit }}</span>{% endif %}</td>
+          <td class="text-right">{{ r.before }}</td><td class="text-right">{{ r.after }}</td>
+          <td class="text-right tabular-nums">{{ r.change }}{% if r.per_year is not none %}<div class="text-xs text-slate-400">{{ '%+.1f'|format(r.per_year) }} per year</div>{% endif %}</td>
+          <td class="{{ 'text-green-700' if r.direction == 'Better' else 'text-red-700' if r.direction == 'Worse' else 'text-slate-500' }} font-medium">{{ r.direction }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% for n in compare.notes %}<p class="px-6 pt-2 text-xs text-slate-500">{{ n }}</p>{% endfor %}
+    <p class="px-6 py-3 text-xs text-slate-400">Verdict rules: a change of risk level or of 10 percentage points or more decides it; otherwise memory (2 points) and daily-life scores (1 point) are used. A screening summary, not a clinical judgement.</p>
+  </section>
+  {% endif %}
+
+  <!-- Charts -->
+  <section class="card p-6 lg:col-span-2">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <p class="card-title">Risk over time</p>
+      <div class="flex flex-wrap gap-3 text-xs text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full bg-teal-600"></span>Home check</span>
+        <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 bg-indigo-600"></span>Clinical report</span>
+        <span class="flex items-center gap-1.5"><span class="h-2.5 w-2.5 rotate-45 bg-violet-600"></span>Simulated</span>
+      </div>
+    </div>
+    {% if chart|length >= 2 %}<div class="mt-4 h-72"><canvas id="riskChart"></canvas></div>
+    {% else %}<p class="mt-3 rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">The chart appears after two or more tests.</p>{% endif %}
+  </section>
+  <section class="card p-6">
+    <p class="card-title">Memory and daily-life scores</p>
+    <p class="mt-1 text-xs text-slate-500">As a percentage of each score's maximum; higher is better.</p>
+    {% if chart|length >= 2 %}<div class="mt-4 h-72"><canvas id="scoreChart"></canvas></div>
+    {% else %}<p class="mt-3 rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Appears after two or more tests.</p>{% endif %}
+  </section>
+  {% if bmi_chart|length >= 2 %}
+  <section class="card p-6 lg:col-span-3">
+    <p class="card-title">BMI over time</p><p class="mt-1 text-xs text-slate-500">Each profile update of height or weight.</p>
+    <div class="mt-4 h-56"><canvas id="bmiChart"></canvas></div>
+  </section>
+  {% endif %}
+
+  {% if latest %}
+  <!-- What-if -->
+  <section class="card p-6 lg:col-span-3">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <p class="card-title">What-if simulation</p>
+        <p class="mt-1 max-w-2xl text-sm text-slate-500">Move the sliders for factors that can change to see how the estimated risk would change. Age, gender, ethnicity, education and family history stay fixed. Starting values are from the latest test. Simulations are not saved.</p>
+      </div>
+      <button id="resetBtn" type="button" class="btn btn-secondary">Reset</button>
+    </div>
+    <div class="mt-5 grid gap-6 lg:grid-cols-3">
+      <div class="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:col-span-2">
+        {% for f in sliders %}
+        {% set v = slider_start[f.name]|round(0 if f.kind == 'select' or f.step == 1 else 1) %}
+        <div>
+          <div class="flex items-baseline justify-between gap-3 text-sm">
+            <label for="wi_{{ f.name }}" class="font-medium text-slate-700">{{ f.label }}{% if obs.inputs.get(f.name) is none %} <span class="text-xs font-normal text-slate-400">(typical value; not provided)</span>{% endif %}</label>
+            <span class="whitespace-nowrap tabular-nums text-slate-600"><span id="val_{{ f.name }}">{% if f.kind == 'select' %}{% for val, lab in f.options if val == v|int %}{{ lab }}{% endfor %}{% else %}{{ '%g'|format(v) }}{% endif %}</span> <span class="text-xs text-slate-400">{{ f.unit or '' }}</span></span>
+          </div>
+          {% if f.kind == 'select' %}
+          <select id="wi_{{ f.name }}" data-feature="{{ f.name }}" data-initial="{{ v|int }}" class="whatif field-input mt-1">
+            {% for val, lab in f.options %}<option value="{{ val }}" {{ 'selected' if v|int == val }}>{{ lab }}</option>{% endfor %}
+          </select>
+          {% else %}
+          <input id="wi_{{ f.name }}" data-feature="{{ f.name }}" data-initial="{{ v }}" class="whatif mt-2 w-full" type="range" min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}" value="{{ v }}">
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="lg:sticky lg:top-24 lg:self-start">
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-5">
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Simulated risk</p>
+          <p id="simProb" class="mt-1 text-4xl font-bold text-risk-{{ latest.risk_level }}">{{ latest.probability|pct }}</p>
+          <p class="mt-2"><span id="simBadge" class="badge risk-{{ latest.risk_level }}">{{ latest.risk_level }} risk</span></p>
+          <div class="mt-4 space-y-1.5 border-t border-slate-200 pt-4 text-sm">
+            <div class="flex justify-between"><span class="text-slate-500">Current risk</span><span class="font-medium">{{ latest.probability|pct }}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Difference</span><span id="simDelta" class="font-semibold">0.0 pp</span></div>
+          </div>
+          <p id="simStatus" class="mt-3 text-xs text-slate-400">Adjust a slider to recompute.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- History -->
+  <section class="card overflow-hidden lg:col-span-3" id="history">
+    <div class="p-6 pb-3"><p class="card-title">Full history</p><p class="mt-1 text-xs text-slate-500">Every test, scan report and profile change, newest first, with date and time.</p></div>
+    {% if timeline %}
+    <div class="overflow-x-auto">
+    <table class="table w-full min-w-[820px]">
+      <thead><tr><th>Date and time</th><th>Type</th><th>Result</th><th>Details</th><th></th></tr></thead>
+      <tbody>
+      {% for e in timeline %}
+      <tr>
+        {% if e.type == 'test' %}{% set r = e.pred %}{% set i = r.observation.inputs %}
+        <td class="whitespace-nowrap">{{ e.when.strftime('%d %b %Y, %H:%M') }}</td>
+        <td>{{ kind_badge(r.observation.kind_label, r.observation.is_simulated) }}</td>
+        <td class="whitespace-nowrap">{{ risk_badge(r.risk_level) }} <span class="ml-1 font-semibold">{{ r.probability|pct }}</span></td>
+        <td class="text-xs text-slate-600">Memory {{ '%.1f'|format(i.MMSE) }}/30, everyday tasks {{ '%.1f'|format(i.FunctionalAssessment) }}/10, self-care {{ '%.1f'|format(i.ADL) }}/10
+          {%- if (i._assessment or {}).voice_used %} &middot; voice help{% endif %}{% if r.observation.note %}<div class="text-slate-400">{{ r.observation.note }}</div>{% endif %}</td>
+        <td class="whitespace-nowrap"><a class="text-sm font-medium text-brand-600 hover:underline" href="{{ url_for('main.result', prediction_id=r.id) }}">Result</a>
+          <a class="ml-3 text-sm font-medium text-brand-600 hover:underline" href="{{ url_for('main.explain', prediction_id=r.id) }}">Explain</a></td>
+        {% elif e.type == 'scan' %}{% set sc = e.scan %}
+        <td class="whitespace-nowrap">{{ sc.scan_date.strftime('%d %b %Y') }}</td>
+        <td><span class="badge bg-amber-50 text-amber-800">{{ sc.scan_type }} scan</span></td>
+        <td class="text-xs text-slate-400">Not used by the model</td>
+        <td class="text-xs text-slate-600">{{ sc.facility or '' }}{% if sc.findings %}<div>{{ sc.findings[:160] }}{{ '...' if sc.findings|length > 160 }}</div>{% endif %}</td>
+        <td>{% if sc.file_name %}<a class="text-sm font-medium text-brand-600 hover:underline" href="{{ url_for('main.scan_file', scan_id=sc.id) }}" target="_blank" rel="noopener">View file</a>{% endif %}</td>
+        {% else %}{% set m = e.m %}
+        <td class="whitespace-nowrap">{{ e.when.strftime('%d %b %Y, %H:%M') }}</td>
+        <td><span class="badge bg-slate-100 text-slate-700">Profile update</span></td>
+        <td class="text-sm">BMI {{ m.bmi }}</td>
+        <td class="text-xs text-slate-600">{{ m.entered_as }}</td><td></td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}<p class="px-6 pb-6 text-sm text-slate-500">Nothing recorded yet.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const series = {{ chart|tojson }};
+  const pointStyle = t => t.simulated ? 'rectRot' : t.kind === 'home' ? 'circle' : 'rect';
+  const pointColor = t => t.simulated ? '#7c3aed' : t.kind === 'home' ? '#0d9488' : '#4f46e5';
+  if (series.length >= 2) {
+    new Chart(document.getElementById('riskChart'), {
+      type: 'line',
+      data: { labels: series.map(t => t.date), datasets: [{
+        label: 'Risk', data: series.map(t => +(t.probability * 100).toFixed(1)),
+        borderColor: '#0b8396', backgroundColor: 'rgba(11,131,150,.08)', fill: true, tension: .2,
+        pointRadius: 7, pointHoverRadius: 9, pointStyle: series.map(pointStyle), pointBackgroundColor: series.map(pointColor),
+        segment: { borderDash: ctx => series[ctx.p1DataIndex].simulated ? [6, 4] : undefined } }] },
+      options: { maintainAspectRatio: false,
+        scales: { y: { min: 0, max: 100, title: { display: true, text: 'Probability (%)' } } },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.parsed.y}% (${series[c.dataIndex].kind === 'home' ? 'home check' : 'clinical report'}${series[c.dataIndex].simulated ? ', simulated' : ''})` } } } },
+      plugins: [{ id: 'bands', beforeDraw(chart) {
+        const {ctx, chartArea: a, scales: {y}} = chart;
+        [[0, {{ RISK_LOW_MAX*100 }}, 'rgba(22,163,74,.06)'], [{{ RISK_LOW_MAX*100 }}, {{ RISK_HIGH_MIN*100 }}, 'rgba(245,158,11,.07)'], [{{ RISK_HIGH_MIN*100 }}, 100, 'rgba(220,38,38,.06)']]
+          .forEach(([lo, hi, c]) => { ctx.fillStyle = c; ctx.fillRect(a.left, y.getPixelForValue(hi), a.right - a.left, y.getPixelForValue(lo) - y.getPixelForValue(hi)); });
+      }}],
+    });
+    const pctOf = (v, max) => v === null ? null : +(100 * v / max).toFixed(1);
+    new Chart(document.getElementById('scoreChart'), {
+      type: 'line',
+      data: { labels: series.map(t => t.date), datasets: [
+        { label: 'Memory and thinking', data: series.map(t => pctOf(t.MMSE, 30)), borderColor: '#2563eb', tension: .2 },
+        { label: 'Everyday tasks', data: series.map(t => pctOf(t.FA, 10)), borderColor: '#0d9488', tension: .2 },
+        { label: 'Self-care', data: series.map(t => pctOf(t.ADL, 10)), borderColor: '#d97706', tension: .2 }] },
+      options: { maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } },
+    });
+  }
+  const bmi = {{ bmi_chart|tojson }};
+  if (bmi.length >= 2) {
+    new Chart(document.getElementById('bmiChart'), { type: 'line',
+      data: { labels: bmi.map(b => b.date), datasets: [{ label: 'BMI', data: bmi.map(b => b.bmi), borderColor: '#0b8396', tension: .2, pointRadius: 5 }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+  }
+
+  // ---- what-if simulation ----
+  const controls = [...document.querySelectorAll('.whatif')];
+  let timer = null, seq = 0;
+  function recompute() {
+    const changes = {};
+    controls.forEach(c => { changes[c.dataset.feature] = parseFloat(c.value); document.getElementById('val_' + c.dataset.feature).textContent = c.tagName === 'SELECT' ? c.options[c.selectedIndex].text : c.value; });
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const my = ++seq;
+      document.getElementById('simStatus').textContent = 'Recomputing...';
+      const r = await fetch('{{ url_for('main.whatif') }}', { method: 'POST', headers: {'Content-Type': 'application/json'},
+                             body: JSON.stringify({ patient_id: {{ p.id }}, changes }) });
+      if (my !== seq) return;
+      const d = await r.json();
+      if (!r.ok) { document.getElementById('simStatus').textContent = 'Invalid input'; return; }
+      const prob = document.getElementById('simProb'), badge = document.getElementById('simBadge'), delta = document.getElementById('simDelta');
+      prob.textContent = (d.probability * 100).toFixed(1) + '%';
+      prob.className = 'mt-1 text-4xl font-bold text-risk-' + d.risk_level;
+      badge.className = 'badge risk-' + d.risk_level; badge.textContent = d.risk_level + ' risk';
+      const pp = d.delta * 100;
+      delta.textContent = (pp > 0 ? '+' : '') + pp.toFixed(1) + ' pp';
+      delta.style.color = Math.abs(pp) < 0.05 ? '#334155' : (pp > 0 ? '#b91c1c' : '#15803d');
+      document.getElementById('simStatus').textContent = 'Updated live from the hybrid model.';
+    }, 120);
+  }
+  controls.forEach(c => c.addEventListener('input', recompute));
+  const reset = document.getElementById('resetBtn');
+  if (reset) reset.addEventListener('click', () => { controls.forEach(c => c.value = c.dataset.initial); recompute(); });
+</script>
+{% endblock %}

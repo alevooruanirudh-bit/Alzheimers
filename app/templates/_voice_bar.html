@@ -1,0 +1,12 @@
+<div id="voiceBar" class="card flex flex-wrap items-center gap-3 p-4">
+  <svg class="h-8 w-8 flex-none text-brand-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v4"/></svg>
+  <div class="min-w-0 flex-1">
+    <p class="text-sm font-semibold text-ink-900">Voice help: hear the questions and answer by speaking</p>
+    <p class="text-xs text-slate-500">For anyone who finds reading or typing difficult, including poor eyesight. <strong>Start voice help</strong> goes through every question for you: it reads each one, and after the beep you say the answer. Or use the buttons under any single question: <strong>Read aloud</strong> only reads it out, and <strong>Speak my answer</strong> lets you answer it by speaking. Spoken answers work in Google Chrome, Microsoft Edge and Safari; Firefox can read questions aloud but cannot listen.</p>
+    <p data-no-listen class="mt-1 hidden text-xs text-amber-700">This browser can read questions aloud but cannot listen. For spoken answers, use Google Chrome, Microsoft Edge or Safari.</p>
+    <p data-unsupported class="mt-1 hidden text-xs text-red-700">This browser does not support voice. Please use Google Chrome, Microsoft Edge or Safari.</p>
+    <p id="voiceStatus" class="mt-1 hidden text-sm font-semibold text-brand-700"></p>
+  </div>
+  <button type="button" id="voiceStart" class="btn btn-primary">Start voice help</button>
+  <button type="button" id="voiceStop" class="btn btn-secondary hidden">Stop voice help</button>
+</div>

@@ -1,0 +1,18 @@
+{% macro risk_badge(level, big=False) -%}
+<span class="badge risk-{{ level }} {{ 'px-4 py-1.5 text-sm' if big }}"><span class="h-2 w-2 rounded-full dot-{{ level }}"></span>{{ level }} risk</span>
+{%- endmacro %}
+
+{% macro factor_list(items, direction) -%}
+{% if items %}
+<ul class="space-y-2.5">
+  {% for f in items %}
+  <li class="flex items-start gap-3">
+    <span class="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full {{ 'bg-red-100 text-red-700' if direction == 'up' else 'bg-green-100 text-green-700' }}">
+      <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="{{ 'M12 19V5m-6 6l6-6 6 6' if direction == 'up' else 'M12 5v14m6-6l-6 6-6-6' }}"/></svg>
+    </span>
+    <span class="text-sm text-slate-700">{{ f.text }} <span class="whitespace-nowrap text-xs text-slate-400">(SHAP {{ '%+.2f'|format(f.shap) }})</span></span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="text-sm text-slate-500">None.</p>{% endif %}
+{%- endmacro %}

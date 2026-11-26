@@ -1,0 +1,11 @@
+{
+  "rule": "MMSE < 24 AND >= 2 of {FA < 5, ADL < 5, MemoryComplaints, BehavioralProblems}",
+  "rule_accuracy_train": 0.9569517161140197,
+  "n_exceptions_train": 74,
+  "exception_rate_train": 0.04304828388598022,
+  "exception_predictability_cv_auc": 0.5151400640762344,
+  "expected_accuracy_ceiling": 0.9569517161140197,
+  "test_accuracy_sd_at_ceiling": 0.009787881584287202,
+  "z_needed_for_98_1": 2.4569447105475524,
+  "rule_accuracy_test": 0.9558139534883721
+}

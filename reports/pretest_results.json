@@ -1,0 +1,179 @@
+{
+  "n_test": 430,
+  "scenarios": {
+    "A. All inputs (clinic scores)": {
+      "accuracy": 0.9558139534883721,
+      "precision": 0.9463087248322147,
+      "recall": 0.9276315789473685,
+      "f1": 0.9368770764119602,
+      "roc_auc": 0.9447415751609239,
+      "confusion_matrix": [
+        [
+          270,
+          8
+        ],
+        [
+          11,
+          141
+        ]
+      ],
+      "threshold": 0.5,
+      "accuracy_95ci": [
+        0.9372093023255814,
+        0.9744186046511628
+      ],
+      "note": "Reference."
+    },
+    "B. No blood tests": {
+      "accuracy": 0.9558139534883721,
+      "precision": 0.9463087248322147,
+      "recall": 0.9276315789473685,
+      "f1": 0.9368770764119602,
+      "roc_auc": 0.9381862930708066,
+      "confusion_matrix": [
+        [
+          270,
+          8
+        ],
+        [
+          11,
+          141
+        ]
+      ],
+      "threshold": 0.5,
+      "accuracy_95ci": [
+        0.9372093023255814,
+        0.9744186046511628
+      ],
+      "note": "Cholesterol and triglycerides replaced by training medians."
+    },
+    "C. No blood tests, no blood pressure": {
+      "accuracy": 0.9558139534883721,
+      "precision": 0.9463087248322147,
+      "recall": 0.9276315789473685,
+      "f1": 0.9368770764119602,
+      "roc_auc": 0.9416532563422946,
+      "confusion_matrix": [
+        [
+          270,
+          8
+        ],
+        [
+          11,
+          141
+        ]
+      ],
+      "threshold": 0.5,
+      "accuracy_95ci": [
+        0.9372093023255814,
+        0.9744186046511628
+      ],
+      "note": "Blood tests and blood pressure replaced by training medians."
+    },
+    "D. C + small error (MMSE +/-2, other scores +/-1)": {
+      "accuracy": 0.8891860465116279,
+      "accuracy_sd": 0.010010135480151599,
+      "recall": 0.8368421052631578,
+      "roc_auc": 0.8829911728511929,
+      "note": "Mean of 20 repetitions with random error added to the three scores."
+    },
+    "D. C + large error (MMSE +/-4, other scores +/-2)": {
+      "accuracy": 0.8217441860465116,
+      "accuracy_sd": 0.014713323285323118,
+      "recall": 0.7358552631578947,
+      "roc_auc": 0.823024540893601,
+      "note": "Mean of 20 repetitions with random error added to the three scores."
+    },
+    "E. No memory/daily-life information": {
+      "accuracy": 0.6953488372093023,
+      "precision": 0.5668789808917197,
+      "recall": 0.5855263157894737,
+      "f1": 0.5760517799352751,
+      "roc_auc": 0.6910261264672473,
+      "confusion_matrix": [
+        [
+          210,
+          68
+        ],
+        [
+          63,
+          89
+        ]
+      ],
+      "threshold": 0.47,
+      "accuracy_95ci": [
+        0.6511627906976745,
+        0.7372093023255814
+      ],
+      "note": "Separate XGBoost using only demographics, lifestyle, health history and symptoms.",
+      "cv": {
+        "accuracy": {
+          "mean": 0.7120482744592853,
+          "std": 0.014350318038904302,
+          "folds": [
+            0.6976744186046512,
+            0.7209302325581395,
+            0.6918604651162791,
+            0.7267441860465116,
+            0.7230320699708455
+          ]
+        },
+        "precision": {
+          "mean": 0.6294017710105099,
+          "std": 0.04264530089761806,
+          "folds": [
+            0.5934065934065934,
+            0.6756756756756757,
+            0.5701754385964912,
+            0.6320754716981132,
+            0.6756756756756757
+          ]
+        },
+        "recall": {
+          "mean": 0.470261482183986,
+          "std": 0.05935870205704226,
+          "folds": [
+            0.4462809917355372,
+            0.4098360655737705,
+            0.5327868852459017,
+            0.5491803278688525,
+            0.4132231404958678
+          ]
+        },
+        "f1": {
+          "mean": 0.5342050625180098,
+          "std": 0.0309441309378305,
+          "folds": [
+            0.5094339622641509,
+            0.5102040816326531,
+            0.5508474576271186,
+            0.5877192982456141,
+            0.5128205128205128
+          ]
+        },
+        "roc_auc": {
+          "mean": 0.685007824467369,
+          "std": 0.019364468363824393,
+          "folds": [
+            0.6549308824074418,
+            0.6950782749963078,
+            0.6934536996012406,
+            0.7099025254762961,
+            0.6716737398555581
+          ]
+        }
+      }
+    }
+  },
+  "imputation": "training-set medians",
+  "blood_tests": [
+    "CholesterolTotal",
+    "CholesterolLDL",
+    "CholesterolHDL",
+    "CholesterolTriglycerides"
+  ],
+  "blood_pressure": [
+    "SystolicBP",
+    "DiastolicBP"
+  ]
+}

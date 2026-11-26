@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import risk_badge, factor_list %}
+{% block title %}Explanation{% endblock %}
+{% block heading %}Why this prediction?{% endblock %}
+{% block subheading %}{{ patient.name }} &middot; {{ pred.probability|pct }} &middot; SHAP and Transformer attention{% endblock %}
+{% block header_actions %}{{ risk_badge(pred.risk_level) }}{% endblock %}
+{% block content %}
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="card p-6 lg:col-span-1">
+    <p class="card-title">Top factors in plain words</p>
+    <p class="mb-4 mt-1 text-xs text-slate-500">From SHAP values of the final XGBoost model.</p>
+    <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-red-700">Increased the risk</p>
+    {{ factor_list(res.top_increasing, 'up') }}
+    <p class="mb-2 mt-5 text-xs font-semibold uppercase tracking-wider text-green-700">Lowered the risk</p>
+    {{ factor_list(res.top_decreasing, 'down') }}
+  </section>
+
+  <section class="card p-6 lg:col-span-2">
+    <p class="card-title">SHAP waterfall for this patient</p>
+    <p class="mt-1 text-xs text-slate-500">Starts at the model's average output E[f(x)] and adds each feature's contribution to reach this patient's output f(x).
+      Values are in log-odds of the XGBoost model before calibration. All embedding dimensions are summed into one "Transformer embedding" row.</p>
+    <img class="fig mt-4" src="{{ url_for('main.explain_plot', prediction_id=pred.id, kind='waterfall') }}" alt="SHAP waterfall plot">
+  </section>
+
+  <section class="card p-6 lg:col-span-3">
+    <p class="card-title">SHAP force plot</p>
+    <p class="mt-1 text-xs text-slate-500">Red features push the prediction higher, blue features push it lower.</p>
+    <div class="overflow-x-auto"><img class="fig mt-4 min-w-[720px]" src="{{ url_for('main.explain_plot', prediction_id=pred.id, kind='force') }}" alt="SHAP force plot"></div>
+  </section>
+
+  <section class="card p-6 lg:col-span-2">
+    <p class="card-title">Transformer attention for this patient</p>
+    <p class="mt-1 text-xs text-slate-500">Average attention from the [CLS] token to each feature token (all layers and heads). Attention shows where the Transformer looks; it is not the same as importance.</p>
+    <div class="mt-4 h-96"><canvas id="attChart"></canvas></div>
+  </section>
+
+  <section class="card p-6">
+    <p class="card-title">Plain XGBoost on original features</p>
+    <p class="mt-1 text-xs text-slate-500">SHAP from the baseline XGBoost on the 32 original inputs (no embeddings, no feature engineering). Because most of the hybrid's signal flows through the Transformer embedding, this view gives the clearest clinical reading.</p>
+    <ul class="mt-4 space-y-2">
+      {% for f in plain_shap %}
+      <li class="flex items-start gap-2 text-sm">
+        <span class="mt-1.5 h-2 w-2 flex-none rounded-full {{ 'bg-red-500' if f.shap > 0 else 'bg-green-500' }}"></span>
+        <span class="text-slate-700">{{ f.text }} <span class="whitespace-nowrap text-xs text-slate-400">({{ '%+.2f'|format(f.shap) }})</span></span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+<h3 class="mb-3 mt-10 text-sm font-semibold uppercase tracking-wider text-slate-500">Global explanations (all test patients)</h3>
+{% if global_info %}
+<p class="mb-4 text-sm text-slate-600">Across the test set, the Transformer components (embedding + risk score) account for
+  <strong>{{ global_info.transformer_share_of_hybrid_shap|pct }}</strong> of the hybrid model's mean |SHAP|. Rank agreement between attention and SHAP (Spearman):
+  <strong>{{ '%.2f'|format(global_info.attention_vs_shap_spearman) }}</strong>.</p>
+{% endif %}
+<div class="grid gap-6 lg:grid-cols-2">
+  {% for file, title in [('shap_summary_hybrid.png', 'Hybrid SHAP summary (beeswarm)'), ('shap_bar_hybrid.png', 'Hybrid mean |SHAP|'),
+                         ('shap_summary_plain_xgb.png', 'Plain XGBoost SHAP summary'), ('shap_bar_plain_xgb.png', 'Plain XGBoost mean |SHAP|'),
+                         ('attention_cls.png', 'Transformer [CLS] attention'), ('attention_matrix.png', 'Feature-to-feature attention heatmap')] %}
+  <section class="card p-5"><p class="card-title mb-3">{{ title }}</p><img class="fig" loading="lazy" src="{{ url_for('main.figure', name=file) }}" alt="{{ title }}"></section>
+  {% endfor %}
+  <section class="card p-5 lg:col-span-2"><p class="card-title mb-3">Top features: attention vs SHAP</p><img class="fig" loading="lazy" src="{{ url_for('main.figure', name='attention_vs_shap.png') }}" alt="Attention vs SHAP"></section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const att = {{ attention|tojson }};
+  new Chart(document.getElementById('attChart'), {
+    type: 'bar',
+    data: { labels: att.map(a => a.label), datasets: [{ data: att.map(a => a.attention), backgroundColor: '#14b8a6', borderRadius: 4 }] },
+    options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } },
+               scales: { x: { title: { display: true, text: 'attention weight' } }, y: { ticks: { font: { size: 11 } } } } },
+  });
+</script>
+{% endblock %}

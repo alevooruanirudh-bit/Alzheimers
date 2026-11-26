@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Create account{% endblock %}
+{% block heading %}Create an account{% endblock %}
+{% block subheading %}One account per person. A family member or carer can create and use it for them.{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-md">
+  <form method="post" class="card space-y-4 p-6" novalidate>
+    <p class="card-title">Account details</p>
+    <div>
+      <label for="username" class="text-sm font-medium text-slate-700">Choose a username</label>
+      <input id="username" name="username" value="{{ values.get('username', '') }}" autocomplete="username" autocapitalize="none" class="field-input mt-1 {{ 'field-error' if errors.username }}" placeholder="e.g. lakshmi.r">
+      {% if errors.username %}<p class="mt-1 text-xs text-red-600">{{ errors.username }}</p>{% else %}<p class="mt-1 text-xs text-slate-500">Letters and numbers, no spaces. Used to log in.</p>{% endif %}
+    </div>
+    <div>
+      <label for="password" class="text-sm font-medium text-slate-700">Password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" class="field-input mt-1 {{ 'field-error' if errors.password }}">
+      {% if errors.password %}<p class="mt-1 text-xs text-red-600">{{ errors.password }}</p>{% else %}<p class="mt-1 text-xs text-slate-500">At least 6 characters.</p>{% endif %}
+    </div>
+    <div>
+      <label for="password2" class="text-sm font-medium text-slate-700">Type the password again</label>
+      <input id="password2" name="password2" type="password" autocomplete="new-password" class="field-input mt-1 {{ 'field-error' if errors.password2 }}">
+      {% if errors.password2 %}<p class="mt-1 text-xs text-red-600">{{ errors.password2 }}</p>{% endif %}
+    </div>
+    <p class="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">One account can hold several profiles, for example yourself, your mother and your father. You add them after creating the account.</p>
+    <button class="btn btn-primary w-full">Create account</button>
+    <p class="text-center text-sm text-slate-500">Already have an account? <a href="{{ url_for('auth.login') }}" class="font-medium text-brand-600 hover:underline">Log in</a></p>
+    <p class="text-xs text-slate-400">Research prototype: passwords are stored as secure hashes, and data stays in the local database on this computer.</p>
+  </form>
+</div>
+{% endblock %}
